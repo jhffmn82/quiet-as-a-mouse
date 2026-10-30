@@ -4,7 +4,8 @@ One 3D stealth level with 2D pixel-art characters. Mouse, a tiny hooded thief, h
 Vaults of Hush. The start screen plays it straight. The joke is buried until Percival, her narrator, clears his throat,
 and the guard in the next room hears him through the bars.
 
-Play it: https://claude.ai/artifact/JoaabeSZuRKP7Fz2NFTNgw (private until shared).
+Play it: https://jhffmn82.github.io/quiet-as-a-mouse/ (built from `out/web` by `python tools/build.py`; the site is
+the `pages` branch: play.html as index.html, with voice.mp3 and props3d.json beside it).
 
 ## The way in, one rule to a room
 
