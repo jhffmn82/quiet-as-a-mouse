@@ -1,0 +1,1462 @@
+<title>Quiet as a Mouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@500;600;700&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap">
+<style>
+/* Candlelight and ink. The world is rendered small and scaled up sharp; the interface sits on ink scrims around it.
+   Three faces: Cormorant SC for the interface, IM Fell English for anything spoken, Lilita One only for shouting.
+   Gilt and parchment for the interface; hush teal means safe, crimson means danger, and nothing else gets a colour. */
+:root {
+  --ink: #0c0a10; --ink-2: #16121c; --stone: #4a3f45; --parchment: #ecdfc3; --parchment-dim: #b7a98c; --gilt: #c9a14a; --gilt-dark: #6e5423;
+  --ember: #ffb35a; --hush: #8fb4a8; --crimson: #e0503a;
+  --ui: 'Cormorant SC', 'Iowan Old Style', Georgia, serif;
+  --voice: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+  --shout: 'IM Fell English SC', 'Iowan Old Style', Georgia, serif;
+  --px: 3px;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--ink); color: var(--parchment); font-family: var(--voice); overflow: hidden; -webkit-user-select: none; user-select: none; touch-action: none; }
+#app { position: fixed; inset: 0; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hud { position: absolute; pointer-events: none; }
+/* a pixel frame: a solid edge with notched corners, drawn with shadows so it stays crisp at any size */
+.pxf { --c: var(--gilt-dark); box-shadow: 0 calc(-1 * var(--px)) 0 0 var(--c), 0 var(--px) 0 0 var(--c), calc(-1 * var(--px)) 0 0 0 var(--c), var(--px) 0 0 0 var(--c); }
+#scrimTop, #scrimBot { left: 0; right: 0; }
+#scrimTop { top: 0; height: 190px; background: linear-gradient(#0c0a10e6, #0c0a1000); }
+#scrimBot { bottom: 0; height: 170px; background: linear-gradient(#0c0a1000, #0c0a10cc); }
+
+/* Percival's plate */
+#box { top: calc(env(safe-area-inset-top, 0px) + 16px); left: calc(env(safe-area-inset-left, 0px) + 16px);
+  display: flex; gap: 14px; align-items: flex-start; transition: transform .55s cubic-bezier(.2, 1.5, .4, 1), opacity .3s; }
+#box.away { transform: translateY(-200px); opacity: 0; }
+#frame { width: 108px; height: 108px; flex: none; position: relative; overflow: hidden; background: radial-gradient(circle at 50% 40%, #4a1e2c, #1c0a12 75%);
+  --c: var(--gilt); box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c), 0 0 0 6px #0c0a10, 0 10px 24px #000a; }
+#face { position: absolute; left: 50%; top: 2px; width: 192px; height: 192px; margin-left: -96px; image-rendering: pixelated; }
+#meter { display: grid; gap: 5px; min-width: 0; width: 300px; padding: 8px 12px 10px; background: #0c0a10c8; --c: #2a2330;
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+#who { font: 600 13px var(--ui); letter-spacing: .14em; color: var(--gilt); }
+#state { font: 600 23px/1.05 var(--ui); letter-spacing: .02em; color: var(--parchment); text-shadow: 0 2px 4px #000; }
+#cause { font: italic 16px/1.25 var(--voice); color: var(--parchment-dim); text-shadow: 0 1px 3px #000; min-height: 20px; }
+#ears { display: flex; align-items: center; gap: 6px; white-space: nowrap; font: 600 14px var(--ui); letter-spacing: .04em; color: var(--parchment-dim); min-height: 18px; }
+#ears.hot { color: #ff8a6a; }
+#ears svg { width: 16px; height: 16px; flex: none; }
+.bars { display: grid; grid-template-columns: auto 1fr; gap: 3px 9px; align-items: center; font: 600 12px var(--ui); letter-spacing: .12em; color: #a39780; }
+.bar { height: 6px; background: #ffffff14; position: relative; width: 120px; }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--parchment-dim); }
+#breathBar i { background: var(--gilt); }
+.shake { animation: shake .12s linear infinite; }
+@keyframes shake { 0% { transform: translate(0, 0); } 25% { transform: translate(2px, -1px); } 50% { transform: translate(-2px, 1px); } 75% { transform: translate(1px, 2px); } }
+
+/* the job: one line, top right */
+#goal { top: calc(env(safe-area-inset-top, 0px) + 18px); right: calc(env(safe-area-inset-right, 0px) + 18px); text-align: right; max-width: 38vw; display: grid; gap: 3px; justify-items: end; }
+#goal small { font: 600 12px var(--ui); letter-spacing: .16em; color: var(--gilt); }
+#goal span { font: 600 20px/1.15 var(--ui); color: var(--parchment); text-shadow: 0 2px 4px #000; text-wrap: balance; }
+#goal.flash span { animation: flash 1.2s ease-out; }
+#goal p { margin: 6px 0 0; max-width: 30ch; padding: 8px 12px 9px; background: #0c0a10c8; font: italic 17px/1.3 var(--voice); color: var(--parchment); text-align: left; text-wrap: pretty;
+  --c: #2a2330; box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+#goal.flash p { animation: ruleIn 1.6s ease-out; }
+@keyframes ruleIn { from { --c: var(--gilt); background: #2a2010e0; } }
+@keyframes flash { from { color: var(--gilt); text-shadow: 0 0 18px var(--gilt); } }
+#help { right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font: 600 12px var(--ui); letter-spacing: .12em; color: #8d8370; }
+#shh { right: calc(env(safe-area-inset-right, 0px) + 18px); top: calc(env(safe-area-inset-top, 0px) + 84px); display: grid; justify-items: end; gap: 2px;
+  font: 600 17px var(--ui); letter-spacing: .06em; color: var(--parchment); text-shadow: 0 2px 4px #000; }
+#shh b { color: var(--gilt); font-size: 20px; } #shh small { font: italic 13px var(--voice); color: var(--parchment-dim); letter-spacing: 0; }
+#shh.spent { opacity: .45; }
+#sneakOn { left: calc(env(safe-area-inset-left, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); display: grid; gap: 2px;
+  font: 600 15px var(--ui); letter-spacing: .14em; color: var(--gilt); text-shadow: 0 2px 4px #000; }
+#sneakOn small { font: italic 13px var(--voice); color: var(--parchment-dim); letter-spacing: 0; }
+#keys { left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); display: flex; gap: 18px; font: 600 14px var(--ui); letter-spacing: .06em; color: var(--parchment-dim); transition: opacity 1.2s; white-space: nowrap; }
+kbd { font: 700 13px var(--ui); color: var(--ink); background: var(--parchment); padding: 1px 6px; margin-right: 6px; --c: #8d8370;
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+
+/* what he says: size and face follow his volume */
+#sub { left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 54px); transform: translateX(-50%); width: min(840px, calc(100vw - 32px)); text-align: center; text-shadow: 0 2px 6px #000, 0 0 2px #000; }
+#sub p { margin: 0; line-height: 1.22; text-wrap: balance; transition: opacity .35s; }
+#sub .t0 { font: italic 19px var(--voice); color: #a99f8c; }
+#sub .ta { font: italic 22px var(--voice); color: var(--hush); }   /* to the player, not out loud */
+#sub .t1 { font: 25px var(--voice); color: var(--parchment); }
+#sub .t2 { font: 31px var(--voice); color: #ffd98a; }
+#sub .t3 { font: 40px var(--shout); color: var(--crimson); letter-spacing: .03em; text-shadow: 0 3px 0 #2a0806, 0 0 12px #000; }
+#prompt { left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; text-shadow: 0 2px 4px #000; }
+#prompt .row { display: flex; align-items: center; gap: 4px; font: 600 19px var(--ui); letter-spacing: .03em; white-space: nowrap; }
+#prompt em { font: italic 15px var(--voice); color: var(--gilt); } #prompt em.hot { color: #ff8a6a; } #prompt em.safe { color: var(--hush); }
+#hold { width: 140px; height: 4px; background: #ffffff22; } #hold i { display: block; height: 100%; width: 0; background: var(--gilt); }
+
+/* the job's next target, and an arrow to it when it is off screen */
+#objMark { position: absolute; transform: translate(-50%, -100%); display: grid; justify-items: center; gap: 2px; animation: bob 1.4s ease-in-out infinite; }
+#objMark svg { width: 30px; height: 30px; filter: drop-shadow(0 2px 0 #000); }
+#objMark span { font: 600 13px var(--ui); letter-spacing: .08em; color: var(--gilt); text-shadow: 0 2px 3px #000; white-space: nowrap; }
+#objMark.edge svg { width: 24px; height: 24px; }
+@keyframes bob { 50% { margin-top: -5px; } }
+/* marks over the guards */
+.tag { position: absolute; transform: translate(-50%, -100%); display: flex; gap: 4px; align-items: flex-end; pointer-events: none; }
+.tag .m { width: 24px; height: 24px; } .tag .m svg { width: 100%; height: 100%; }
+.tag > svg { width: 24px; height: 24px; filter: drop-shadow(0 2px 0 #000); } .tag > svg:last-child[viewBox^="0 0 15"] { width: 32px; height: 14px; }
+.say { position: absolute; transform: translate(-50%, -100%); max-width: 230px; background: var(--parchment); color: #2a1f16; font: 16px/1.2 var(--voice);
+  padding: 6px 10px 7px; pointer-events: none; text-align: center; --c: #2a1f16;
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c), 0 9px 0 -3px #0006; }
+.say::before, .say::after { content: ""; position: absolute; left: 50%; clip-path: polygon(0 0, 100% 0, 100% 33%, 67% 33%, 67% 67%, 33% 67%, 33% 100%, 0 100%); }
+.say::before { bottom: -15px; width: 18px; height: 15px; margin-left: -9px; background: #2a1f16; }
+.say::after { bottom: -9px; width: 12px; height: 9px; margin-left: -6px; background: var(--parchment); }
+.say b { display: block; font: 700 12px var(--ui); letter-spacing: .12em; color: #7b2b22; }
+
+/* cards */
+.card { position: absolute; inset: 0; display: grid; place-items: start center; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.card > .inner { margin-block: auto; }   /* centred when it fits; when it doesn't, it starts at the top and scrolls */
+.btn { font: 700 20px var(--ui); letter-spacing: .14em; color: var(--ink); background: var(--gilt); border: 0; padding: 11px 30px 12px; cursor: pointer; --c: var(--gilt-dark);
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c), 0 9px 0 -2px #000; }
+.btn:hover { background: #dcb65c; }
+.btn { box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c), inset 0 3px 0 #e6c56e, inset 0 -3px 0 #8a6a2a, 0 9px 0 -2px #000; }
+.btn:focus-visible { outline: 0; --c: var(--parchment); }
+.btn.quiet { box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+#app.carded .hud, #app.carded #touch { visibility: hidden; }
+#endFrame { width: 108px; height: 108px; position: relative; overflow: hidden; background: radial-gradient(circle at 50% 40%, #4a1e2c, #1c0a12 75%); --c: var(--gilt);
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c), 0 0 0 6px #0c0a10; }
+#endFace { position: absolute; left: 50%; top: 2px; width: 192px; height: 192px; margin-left: -96px; image-rendering: pixelated; }
+.btn:active { transform: translateY(3px); }
+.btn[disabled] { opacity: .55; cursor: wait; }
+.btn.quiet { background: transparent; color: var(--parchment); --c: #ecdfc355; box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+.rule { display: flex; align-items: center; gap: 14px; color: var(--gilt); font: 600 14px var(--ui); letter-spacing: .4em; }
+.rule::before, .rule::after { content: ""; width: 56px; height: 3px; background: var(--gilt-dark); }
+
+#start { background: radial-gradient(ellipse 70% 60% at 50% 42%, #0c0a1055, #0c0a10f0 72%); }
+#start .inner { width: min(620px, 100%); display: grid; gap: 20px; justify-items: center; text-align: center; }
+#start h1 { margin: 0; font: 700 clamp(56px, 11vw, 108px)/.88 var(--ui); color: var(--parchment); letter-spacing: .01em; text-wrap: balance;
+  text-shadow: 0 0 40px #ffb35a33, 0 4px 18px #000; animation: rise 1.8s ease-out both; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); letter-spacing: .08em; } }
+#start .tagline { margin: 0; font: italic 21px/1.4 var(--voice); color: var(--parchment-dim); text-wrap: balance; max-width: 34ch; }
+#stage { width: min(560px, 100%); height: 206px; position: relative; overflow: hidden; }
+#stage::after { content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 3px; background: linear-gradient(90deg, transparent, var(--gilt-dark), transparent); }
+#stage canvas { position: absolute; image-rendering: pixelated; }
+#lantern { position: absolute; bottom: 10px; width: 260px; height: 140px; margin-left: -130px; background: radial-gradient(ellipse 50% 50% at 50% 70%, #ffb35a40, transparent 70%); }
+#start .fine { margin: 0; font: 600 13px var(--ui); letter-spacing: .12em; color: #7a7064; }
+
+#pause, #end { background: radial-gradient(ellipse at center, #0c0a10ee, #0c0a10fa); z-index: 5; }
+#pause .inner, #end .inner { width: min(620px, 100%); display: grid; gap: 18px; justify-items: center; text-align: center; }
+#pause h2, #end h2 { margin: 0; font: 700 clamp(44px, 8vw, 72px)/1 var(--ui); letter-spacing: .02em; }
+#end .line { margin: 0; font: italic 21px/1.4 var(--voice); color: var(--parchment-dim); text-wrap: balance; max-width: 34ch; }
+.how { display: grid; gap: 10px; text-align: left; font: 18px/1.35 var(--voice); color: var(--parchment); max-width: 52ch; }
+.how b { font: 700 15px var(--ui); letter-spacing: .1em; color: var(--gilt); display: block; }
+.how p { margin: 0; }
+.stats { display: grid; grid-template-columns: auto auto; gap: 6px 22px; font: 600 18px var(--ui); letter-spacing: .04em; text-align: left; }
+.stats span:nth-child(odd) { text-align: right; color: #8d8370; }
+.stats span:nth-child(even) { font-variant-numeric: tabular-nums; color: var(--parchment); }
+.row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+
+/* touch */
+#stick, #btns { position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+#stick { left: calc(env(safe-area-inset-left, 0px) + 22px); width: 132px; height: 132px; border-radius: 50%; background: #0c0a1066; box-shadow: inset 0 0 0 3px #c9a14a55; touch-action: none; }
+#knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: #c9a14aa6; }
+#btns { right: calc(env(safe-area-inset-right, 0px) + 22px); display: grid; gap: 14px; }
+#btns button { width: 82px; height: 58px; border: 0; background: #0c0a10b3; color: var(--parchment); font: 700 15px var(--ui); letter-spacing: .1em; touch-action: none; --c: var(--gilt-dark);
+  box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+#btns button.on { background: #c9a14a55; }
+#bPause { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: calc(env(safe-area-inset-right, 0px) + 14px); width: 40px; height: 40px; border: 0;
+  background: #0c0a10b3; color: var(--parchment); font: 700 18px var(--ui); --c: var(--gilt-dark); box-shadow: 0 -3px 0 0 var(--c), 0 3px 0 0 var(--c), -3px 0 0 0 var(--c), 3px 0 0 0 var(--c); }
+@media (max-width: 700px) {
+  #scrimTop { height: 200px; }
+  #frame { width: 78px; height: 78px; } #face { width: 144px; height: 144px; margin-left: -72px; }
+  #meter { width: calc(100vw - 130px); gap: 4px; } #state { font-size: 18px; } #cause { font-size: 13px; min-height: 0; }
+  #ears { font-size: 12px; } .bars { grid-template-columns: auto 1fr; } .bars > :nth-child(n + 3) { display: none; }
+  #goal { top: calc(env(safe-area-inset-top, 0px) + 130px); left: calc(env(safe-area-inset-left, 0px) + 16px); right: auto; text-align: left; justify-items: start; max-width: 80vw; }
+  #goal span { font-size: 15px; } #goal p { font-size: 14px; max-width: none; } #help, #keys, #sneakOn { display: none; }
+  #sub { bottom: calc(env(safe-area-inset-bottom, 0px) + 232px); } #sub .t0 { font-size: 15px; } #sub .ta { font-size: 16px; } #sub .t1 { font-size: 18px; } #sub .t2 { font-size: 22px; } #sub .t3 { font-size: 26px; }
+  #prompt { bottom: calc(env(safe-area-inset-bottom, 0px) + 320px); } #prompt .row { font-size: 15px; }
+  #scrimBot { height: 300px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  #scrimTop { height: 130px; } #frame { width: 70px; height: 70px; } #face { width: 128px; height: 128px; margin-left: -64px; }
+  #meter { width: 260px; gap: 3px; } #state { font-size: 16px; } #cause { font-size: 12px; } #ears { font-size: 12px; } .bars, #help, #keys, #sneakOn { display: none; }
+  #goal span { font-size: 15px; } #sub { bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); width: min(56vw, 560px); }
+  #sub .t1 { font-size: 17px; } #sub .t2 { font-size: 20px; } #sub .t3 { font-size: 23px; } #prompt { bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); }
+  #stick { width: 110px; height: 110px; } #btns { grid-template-columns: 1fr 1fr; gap: 10px; } #btns button { width: 70px; height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) { .shake { animation: none; } #start h1 { animation: none; } }
+</style>
+
+<div id="app">
+  <canvas id="view"></canvas>
+  <div id="scrimTop" class="hud" hidden></div><div id="scrimBot" class="hud" hidden></div>
+  <div id="marks" class="hud" style="inset:0"><div id="objMark"></div></div>
+  <div id="box" class="hud away">
+    <div id="frame"><canvas id="face" width="96" height="96"></canvas></div>
+    <div id="meter">
+      <div id="who">Percival · your narrator</div>
+      <div id="state">Quiet</div>
+      <div id="cause"></div>
+      <div id="ears"></div>
+      <div class="bars"><span>Breath</span><div class="bar" id="breathBar"><i></i></div></div>
+    </div>
+  </div>
+  <div id="goal" class="hud" hidden><small id="goalStep"></small><span id="goalText"></span><p id="goalRule" hidden></p></div>
+  <div id="help" class="hud" hidden>Esc · pause, and how Percival works</div>
+  <div id="shh" class="hud" hidden><kbd>Q</kbd>Shh <b id="shhN">2</b><small>the idol over his mouth, 8 seconds</small></div>
+  <div id="sneakOn" class="hud" hidden>SNEAKING<small>Shift to walk</small></div>
+  <div id="keys" class="hud" hidden><span><kbd>WASD</kbd>move</span><span><kbd>Shift</kbd>sneak on/off</span><span><kbd>Space</kbd>run</span><span><kbd>E</kbd>use</span></div>
+  <div id="prompt" class="hud" hidden><div class="row"><kbd id="pkey">E</kbd><span id="promptText"></span></div><em id="promptNote"></em><div id="hold"><i></i></div></div>
+  <div id="sub" class="hud"><p></p></div>
+  <div id="touch" hidden><div id="stick"><div id="knob"></div></div>
+    <div id="btns"><button id="bShh" type="button">Shh</button><button id="bUse" type="button">Use</button><button id="bSneak" type="button">Sneak</button><button id="bRun" type="button">Run</button></div>
+    <button id="bPause" type="button" aria-label="Pause">II</button></div>
+
+  <div id="start" class="card"><div class="inner">
+    <div class="rule">The Vaults of Hush</div>
+    <h1>Quiet as a Mouse</h1>
+    <p class="tagline">Somewhere below lies the Idol of Silence. Take it, and make no sound.</p>
+    <div id="stage"><div id="lantern"></div><canvas id="mouseC" width="64" height="64"></canvas><canvas id="guardC" width="64" height="64"></canvas></div>
+    <button id="go" class="btn" type="button" disabled>Loading</button>
+    <p class="fine">A short stealth heist · best played with sound</p>
+  </div></div>
+  <div id="pause" class="card" hidden><div class="inner">
+    <div class="rule">Paused</div>
+    <div class="how">
+      <p><b>He says what you do</b>Pull, pick, unlock, take or examine anything, and Percival draws a breath, then says it out loud.</p>
+      <p><b>His ring</b>His voice carries to the edge of a ring around Mouse, always the same size; walls cut it short. Stand at anything you can use and the ring shows first. Red means a guard is inside it.</p>
+      <p><b>Guards who hear</b>go to look at whatever he talked about. So get him talking about something over there, and slip past.</p>
+      <p><b>Sights</b>Step into a gold ring and he reads out everything there. His ring follows Mouse while he reads.</p>
+      <p><b>Your feet and their eyes</b>Walking close to a guard, or running nearby, makes him turn. Sneaking is silent: Shift turns it on and off. Guards see in a cone, and best in torchlight. The crawlspace is too low for them.</p>
+      <p><b>The Idol of Silence</b>Once she has it, press Q to clamp it over his mouth for eight seconds. It works twice.</p>
+    </div>
+    <div class="row"><button id="resume" class="btn" type="button">Resume</button><button id="retry" class="btn quiet" type="button">Restart from the last step</button></div>
+  </div></div>
+  <div id="end" class="card" hidden><div class="inner">
+    <div id="endFrame"><canvas id="endFace" width="96" height="96"></canvas></div>
+    <div class="rule" id="endRule">The end</div>
+    <h2 id="endHead">Caught</h2>
+    <p class="line" id="endLine"></p>
+    <div class="stats" id="stats"></div>
+    <div class="row"><button id="again" class="btn" type="button">Try again from the last step</button><button id="over" class="btn quiet" type="button">Start over</button></div>
+  </div></div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+
+const ART = /*ART*/{};
+const CLIPS = /*VOICE*/{};
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------- the vaults
+// One tile is one unit; x runs east, z (the map's y) runs south. Rooms and halls are carved out of solid rock.
+const W = 34, H = 50, WALL = 1.75;
+// The way in runs north, one lesson to a room: the cellar (no guards), the pantry (Nod walks it), the stairs (Stilts
+// blocks them, facing the wrong way). Then the job proper: the guardroom, the archive and the vault.
+const ROOMS = {
+  cellar: { x: 18, y: 45, w: 7, h: 4 },
+  pantry: { x: 11, y: 37, w: 12, h: 5 },
+  post: { x: 13, y: 30, w: 6, h: 4 },
+  entrance: { x: 13, y: 22, w: 8, h: 6 },
+  guardroom: { x: 8, y: 12, w: 18, h: 7 },
+  archive: { x: 3, y: 2, w: 12, h: 7 },
+  vault: { x: 20, y: 2, w: 11, h: 7 },
+};
+const HALLS = [[15, 19, 3, 3], [10, 9, 2, 3], [22, 9, 3, 3], [15, 8, 5, 1],   // the last is the crawlspace, archive to vault
+  [13, 28, 1, 2], [17, 34, 2, 3], [21, 42, 2, 3]];   // the stairs up from the post, the post to the pantry, the pantry to the cellar
+const open = new Uint8Array(W * H), solid = new Uint8Array(W * H), tall = new Uint8Array(W * H);
+for (const r of [...Object.values(ROOMS), ...HALLS.map(([x, y, w, h]) => ({ x, y, w, h }))])
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) open[y * W + x] = 1;
+const DOOR_TILES = [[10, 11], [11, 11]], GATE_TILES = [[22, 11], [23, 11], [24, 11]], GRATE_TILES = [[15, 8]];
+const TGATES = [{ id: 'g1', tiles: [[21, 44], [22, 44]] }, { id: 'g2', tiles: [[17, 36], [18, 36]] }];   // the cellar's gate and the pantry's, each raised by its lever
+const CRAWL = [[15, 8], [16, 8], [17, 8], [18, 8], [19, 8]];
+const guardWalk = (x, y) => walkable(x, y) && !CRAWL.some(([cx, cy]) => cx === x && cy === y);
+const shut = new Uint8Array(W * H);
+const setShut = (tiles, v) => tiles.forEach(([x, y]) => shut[y * W + x] = v);
+const isOpen = (x, y) => x >= 0 && y >= 0 && x < W && y < H && open[y * W + x] === 1;
+const walkable = (x, y) => isOpen(x, y) && !solid[y * W + x] && !shut[y * W + x];
+const clear = (x, y) => isOpen(x, y) && !tall[y * W + x] && !shut[y * W + x];
+
+// furniture: forge-godot's 3D props. h is the height it stands; dull ones can be examined.
+const PROPS = [
+  ['lever-up', 19.5, 45.4, { h: .95, lever: 'g1' }], ['torch-stand', 23.6, 45.6, { h: 1.8, light: 1 }],
+  ['barrel', 24.4, 48.4, { tall: 1, dull: 'b_barrel', name: 'the barrel' }], ['sacks', 18.6, 48.4, { h: .75, dull: 'b_sacks', name: 'the sacks' }],
+
+  ['lever-up', 19.5, 37.4, { h: .95, lever: 'g2' }], ['torch-stand', 22.4, 37.6, { h: 1.8, light: 1 }], ['torch-stand', 11.6, 41.4, { h: 1.8, light: 1 }],
+  ['crate', 11.5, 37.5, { tall: 1 }], ['crate-supply', 13.5, 37.6, { h: .85, yaw: 180, tall: 1 }], ['barrel', 12.6, 41.4, { tall: 1 }],
+  ['sacks', 16.5, 41.4, { h: .75, dull: 'b_sacks', name: 'the sacks' }],
+
+  ['urn-group', 13.5, 33.4, { h: .8, dull: 'b_pots', name: 'the pots' }], ['torch-stand', 15.6, 30.4, { h: 1.8, light: 1 }], ['crate', 18.4, 30.5, {}],
+
+  ['torch-stand', 13.6, 22.6, { h: 1.8, light: 1 }], ['barrel', 13.6, 26.4, { dull: 'b_barrel', name: 'the barrel', tall: 1 }],
+  ['sacks', 19.4, 26.4, { h: .75, dull: 'b_sacks', name: 'the sacks' }], ['wall-plaque', 14.5, 22.4, { h: 1.25 }],
+
+  ['long-table', 17, 15.5, { h: .9, w: 3.7 }],
+  ['chair', 15.5, 14.4, { h: 1, yaw: 180, dull: 'b_chair', name: 'the chair' }], ['chair', 17.5, 16.6, { h: 1, dull: 'b_chair', name: 'the chair' }],
+  ['weapon-rack', 19.5, 12.5, { h: 1.35, tall: 1, dull: 'b_rack', name: 'the weapon rack' }], ['crate-supply', 13.5, 12.6, { h: .85, yaw: 180, tall: 1 }],
+  ['crate', 8.6, 15.5, { tall: 1, dull: 'b_crate', name: 'the crate' }], ['crate', 8.6, 16.5, { tall: 1 }],
+  ['barrel', 25.4, 15.5, { tall: 1 }], ['sacks', 12.5, 18.4, { h: .75, dull: 'b_sacks', name: 'the sacks' }],
+  ['pillar', 11.5, 14.5, { h: 1.55, tall: 1 }], ['pillar', 21.5, 16.5, { h: 1.55, tall: 1 }],
+  ['torch-stand', 8.6, 12.6, { h: 1.8, light: 1 }], ['torch-stand', 25.4, 12.6, { h: 1.8, light: 1 }],
+  ['torch-stand', 8.6, 18.4, { h: 1.8, light: 1 }], ['torch-stand', 25.4, 18.4, { h: 1.8, light: 1 }],
+
+  ...[4, 5, 6, 7, 8].map(x => ['bookshelf', x + .5, 4.5, { h: 2.1, yaw: 180, tall: 1, dull: x === 6 ? 'b_shelf' : null, name: 'the bookshelf' }]),
+  ...[7, 8, 9, 10, 11, 12].map(x => ['bookshelf', x + .5, 6.5, { h: 2.1, yaw: 180, tall: 1, dull: x === 9 ? 'b_shelf' : null, name: 'the bookshelf' }]),
+  ['lever-up', 13.5, 2.5, { h: .95, lever: 'gate' }], ['urn-group', 10.5, 2.5, { h: .8, dull: 'b_urns', name: 'the urns' }],
+  ['desk', 4.5, 2.5, { h: .85, dull: 'b_desk', name: 'the desk' }], ['desk', 9.5, 8.4, { h: .85 }],
+  ['torch-stand', 14.4, 5.5, { h: 1.8, light: 1 }], ['torch-stand', 3.6, 8.4, { h: 1.8, light: 1 }], ['torch-stand', 8.6, 2.6, { h: 1.8, light: 1 }],
+
+  ['pedestal', 28.5, 3.5, { h: .95, idol: 1 }], ['urn-group', 29.5, 7.6, { h: .8, dull: 'b_urns', name: 'the urns' }],
+  ['crate-supply', 20.6, 2.6, { h: .85, yaw: 180, tall: 1 }], ['sacks', 21.5, 7.4, { h: .75, dull: 'b_sacks', name: 'the sacks' }],
+  ['statue', 22.5, 4.5, { h: 1.7, tall: 1 }], ['statue', 27.5, 6.5, { h: 1.7, tall: 1 }],
+  ['torch-stand', 24.5, 2.6, { h: 1.8, light: 1 }], ['torch-stand', 30.4, 7.4, { h: 1.8, light: 1 }],
+].map(([m, x, z, o], i) => { const p = { i, m, x, z, h: 1, ...o }; const tx = Math.floor(x), tz = Math.floor(z);
+  solid[tz * W + tx] = 1; if (p.tall) tall[tz * W + tx] = 1; return p; });
+for (const x of [15, 16, 17, 18]) solid[15 * W + x] = 1;   // the long tables span four tiles
+const TORCHES = PROPS.filter(p => p.light).map(p => ({ x: p.x, z: p.z, y: p.h + .1 }));
+const LEVERS = PROPS.filter(p => p.lever), LEVER = LEVERS.find(p => p.lever === 'gate'), PEDESTAL = PROPS.find(p => p.idol);
+const pulled = L => L.lever === 'gate' ? G.gate : !!G.open[L.lever];
+// sights: things he can't walk past without reading out, in parts. Walking into the gold ring sets him off; his own
+// ring follows her while he reads. The Roll only catches his eye on the way out, once she has the idol.
+const SIGHTS = [
+  { id: 'roll', name: 'the Roll of the Caught', x: 16.5, z: 21.4, r: 1.5, after: 'idol', lure: { x: 14.5, z: 22.9 }, parts: ['roll_a', 'roll_b', 'roll_c'] },
+  { id: 'book', name: "the visitors' book", x: 10.9, z: 8.6, r: 1.3, lure: { x: 9.5, z: 8.9 }, parts: ['book_a', 'book_b', 'book_c'] },
+];
+const sightOn = s => !G.seen[s.id] && (!s.after || G.items[s.after]);
+const DOOR = { x: 11, z: 12 }, GATE = { x: 23.5, z: 12 }, GRATE = { x: 15, z: 8.5 }, ROPE = { x: 16.5, z: 24.5 }, STAIRS = { x: 13.5, z: 28.4 };
+// The job, a step at a time. Each step says what to do, the rule it teaches (if any), where a retry starts (a doorway,
+// never beside the next deed and never in a guard's view), and where its marker points.
+const leverMark = id => { const L = LEVERS.find(p => p.lever === id); return { x: L.x, z: L.z, y: 1.3, icon: 'lever', label: 'the lever' }; };
+const keyMark = name => { const g = guard(name); return { x: g.x, z: g.z, y: 2.3, icon: 'key', label: `${name}'s key` }; };
+const STEPS = [
+  { part: 'Getting in', goal: 'Pull the lever', spawn: { x: 21.5, z: 47.6 }, done: () => !!G.open.g1, mark: () => leverMark('g1'),
+    rule: 'Percival says out loud whatever you do. His voice carries to the edge of the ring.' },
+  { part: 'Getting in', goal: 'Pull the lever while Nod is outside the ring', spawn: { x: 21.5, z: 45.8 }, done: () => !!G.open.g2, mark: () => leverMark('g2'),
+    rule: 'Stand at the lever and the ring shows first. A guard inside it hears him, and comes to look. Wait for Nod to walk out of it.',
+    aside: 't_nod', cue: { x: 21.9, z: 43.4 } },
+  { part: 'Getting in', goal: 'Get past Stilts', spawn: { x: 17.9, z: 35.4 }, done: () => !!G.flags.past, mark: () => ({ ...STAIRS, y: 1.7, icon: 'up', label: 'the stairs' }),
+    rule: 'Guards go to look at whatever he talks about. Examine the pots, then get out of the way.', aside: 't_stilts', cue: { x: 17.9, z: 34.6 } },
+  { part: 'The job', goal: "Pick Gord's pocket for the archive key", pocket: 'Gord', spawn: { x: 17.6, z: 26.4 }, done: () => !!G.items.cellar, mark: () => keyMark('Gord'),
+    rule: 'Sneak up behind him (Shift) and hold E, then keep sneaking away. Once Percival tells him, he pats his belt, then turns round to look.', aside: 't_gord', cue: { x: 16.5, z: 21.2 } },
+  { part: 'The job', goal: 'Unlock the archive door', spawn: { x: 17.6, z: 26.4 }, done: () => G.door, mark: () => ({ x: DOOR.x, z: DOOR.z, y: 1.9, icon: 'door', label: 'the archive door' }),
+    rule: 'Like the pantry: wait until Gord is outside the ring.' },
+  { part: 'The job', goal: 'Pull the lever in the archive', spawn: { x: 10.9, z: 11.5 }, done: () => G.gate, mark: () => leverMark('gate'),
+    rule: 'Step into a gold ring and he reads out everything there. His ring follows you while he reads.' },
+  { part: 'The job', goal: "Pick Bertram's pocket for the case key", pocket: 'Bertram', spawn: { x: 17.5, z: 8.5 }, done: () => !!G.items.case, mark: () => keyMark('Bertram'),
+    rule: 'Bertram turns about. Get behind him while he faces away.' },
+  { part: 'The job', goal: 'Take the Idol of Silence', spawn: { x: 17.5, z: 8.5 }, done: () => !!G.items.idol, mark: () => ({ x: PEDESTAL.x, z: PEDESTAL.z, y: 1.9, icon: 'idol', label: 'the idol' }) },
+  { part: 'The job', goal: 'Climb the rope out', spawn: { x: 17.5, z: 8.5 }, done: () => false, mark: () => ({ x: ROPE.x, z: ROPE.z, y: 2.0, icon: 'up', label: 'the rope' }),
+    rule: 'Press Q to clamp the idol over his mouth for eight seconds. It works twice.' },
+];
+
+const GUARDS = [
+  { kind: 'gord', name: 'Gord', pocket: 'cellar', lantern: 1, route: [[13.5, 13.6], [19.5, 13.6], [19.5, 17.2], [13.5, 17.2]], pause: .8, speed: 1 },
+  { kind: 'stilts', name: 'Stilts', post: [13.5, 30.25], looks: [[-Math.PI / 2, 99]] },   // at the foot of the stairs, guarding them from the wrong side
+  { kind: 'stilts', name: 'Stretch', route: [[3.6, 7.4], [3.6, 5.3], [13.4, 5.3], [13.4, 3.4], [13.4, 5.3], [3.6, 5.3]], pause: 1.2, speed: 1.05 },
+  { kind: 'gord', name: 'Bertram', voice: 'b', pocket: 'case', lantern: 1, post: [25, 5], looks: [[Math.PI / 2, 3.5], [0, 2.2], [-Math.PI / 2, 2.6], [Math.PI, 2.2]] },
+  { kind: 'gord', name: 'Nod', voice: 'n', route: [[12.5, 39.5], [20.5, 39.5]], pauses: [3.5, 1.2], speed: .85 },   // up and down the pantry, dawdling at the far end
+];
+const guard = name => G.guards.find(g => g.def.name === name);
+
+// ---------------------------------------------------------------- geometry helpers
+const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function sightLine(a, b, ok = clear) {
+  const d = dist(a, b), n = Math.ceil(d / .15);
+  for (let i = 1; i < n; i++) { const t = i / n; if (!ok(Math.floor(lerp(a.x, b.x, t)), Math.floor(lerp(a.z, b.z, t)))) return false; }
+  return true;
+}
+function rayLen(o, ang, max) {
+  const dx = Math.cos(ang), dz = Math.sin(ang);
+  for (let s = .1; s < max; s += .1) if (!clear(Math.floor(o.x + dx * s), Math.floor(o.z + dz * s))) return s;
+  return max;
+}
+function findPath(from, to, walkable = guardWalk) { // breadth-first over 8 neighbours (no corner cutting), then pulled tight along clear lines
+  const sx = Math.floor(from.x), sz = Math.floor(from.z);
+  let tx = Math.floor(to.x), tz = Math.floor(to.z);
+  if (!walkable(tx, tz)) { let best = null; for (let r = 1; r < 4 && !best; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++)
+    if (!best && walkable(tx + dx, tz + dz)) best = [tx + dx, tz + dz]; if (!best) return []; [tx, tz] = best; to = { x: tx + .5, z: tz + .5 }; }
+  const prev = new Int32Array(W * H).fill(-1), q = [sz * W + sx]; prev[q[0]] = q[0];
+  for (let qi = 0; qi < q.length; qi++) {
+    const c = q[qi], cx = c % W, cz = (c / W) | 0;
+    if (cx === tx && cz === tz) break;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const nx = cx + dx, nz = cz + dz, ni = nz * W + nx;
+      if (!walkable(nx, nz) || prev[ni] !== -1) continue;
+      if (dx && dz && (!walkable(cx + dx, cz) || !walkable(cx, cz + dz))) continue;
+      prev[ni] = c; q.push(ni);
+    }
+  }
+  const end = tz * W + tx; if (prev[end] === -1) return [];
+  const cells = []; for (let c = end; c !== prev[c]; c = prev[c]) cells.push({ x: c % W + .5, z: ((c / W) | 0) + .5 });
+  if (!cells.length) return [{ x: to.x, z: to.z }];
+  cells.reverse(); cells[cells.length - 1] = { x: to.x, z: to.z };
+  const out = []; let at = from, i = 0;
+  while (i < cells.length) { let j = cells.length - 1; while (j > i && !sightLine(at, cells[j], walkable)) j--; out.push(cells[j]); at = cells[j]; i = j + 1; }
+  return out;
+}
+const lightAt = p => {
+  let l = .08; for (const t of TORCHES) { const d = Math.hypot(p.x - t.x, p.z - t.z); if (d < 5.5) l += Math.pow(1 - d / 5.5, 1.5) * .95; }
+  const r = dist(p, ROPE); if (r < 3) l += (1 - r / 3) * .8;
+  if (!G.items.idol) { const d = dist(p, PEDESTAL); if (d < 3.5) l += (1 - d / 3.5) * .5; }
+  else if (G.P) { const d = dist(p, G.P); if (d < 2) l += (1 - d / 2) * .35; }
+  for (const g of G.guards) if (g.lantern) { const d = dist(p, g); if (d < 2.8) l += (1 - d / 2.8) * .55; }
+  { const d = Math.hypot(p.x - 16.5, p.z - 15.5); if (d < 3) l += (1 - d / 3) * .4; }
+  return Math.min(1, l);
+};
+const roomAt = p => { for (const [id, r] of Object.entries(ROOMS)) if (p.x >= r.x && p.x < r.x + r.w && p.z >= r.y && p.z < r.y + r.h) return id; return null; };
+const effDist = (g, p) => dist(g, p) * (sightLine(g, p) ? 1 : 1.6);   // walls muffle him, and make it less dramatic
+
+// ---------------------------------------------------------------- three.js scene
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const LOW = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;   // phones: smaller shadow maps, less bloom
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x060408); scene.fog = new THREE.Fog(0x060408, 13, 27);
+const ELEV = 47 * Math.PI / 180, CAMD = 12.5, STRETCH = 1 / Math.cos(ELEV) * .86;
+const camera = new THREE.PerspectiveCamera(40, 1, .1, 120);
+const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+const IMG = new Map(await Promise.all([ART.props.src, ART.narrator.src, ...Object.values(ART.chars).map(c => c.src), ...Object.values(ART.terrain)]
+  .map(async s => [s, await loadImg(s)])));
+const pixTex = src => { const t = new THREE.Texture(IMG.get(src)); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+const terrTex = (src, rx, ry) => { const t = new THREE.Texture(IMG.get(src)); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (rx) t.repeat.set(rx, ry); t.needsUpdate = true; return t; };
+
+scene.add(new THREE.HemisphereLight(0x7d86b8, 0x2a1d14, .42));
+{ const fill = new THREE.DirectionalLight(0x8796c4, .45); fill.position.set(0, 8, 9); scene.add(fill); }
+
+{ // walls: a stone lid on every rock tile, a face wherever rock meets floor. A wall with floor on its far (north)
+  // side is a cutaway, knee high, so it never hides the room behind it from the camera.
+  const top = { p: [], n: [], u: [] }, face = { p: [], n: [], u: [] }, lip = { p: [], n: [], u: [] }, floor = { p: [], n: [], u: [] };
+  const quad = (g, a, b, c, d, n, ua, ub, uc, ud, ca = 1, cb = 1, cc = 1, cd = 1) => { for (const [v, uv, k] of [[a, ua, ca], [b, ub, cb], [c, uc, cc], [a, ua, ca], [c, uc, cc], [d, ud, cd]]) { g.p.push(...v); g.n.push(...n); g.u.push(...uv); (g.c ||= []).push(k, k, k); } };
+  const rock = (x, y) => !isOpen(x, y);
+  const LOWH = .45, hOf = (x, y) => !rock(x, y) ? 0 : !rock(x, y - 1) ? LOWH : WALL;
+  const AO = [1, .72, .56, .46, .46];
+  const ao = (cx, cy) => AO[[[-1, -1], [0, -1], [-1, 0], [0, 0]].filter(([dx, dy]) => !isOpen(cx + dx, cy + dy)).length];
+  for (let y = -6; y < H + 8; y++) for (let x = -8; x < W + 8; x++) {
+    if (!rock(x, y)) { quad(floor, [x, 0, y], [x, 0, y + 1], [x + 1, 0, y + 1], [x + 1, 0, y], [0, 1, 0], [x / 9, -y / 4.5], [x / 9, -(y + 1) / 4.5], [(x + 1) / 9, -(y + 1) / 4.5], [(x + 1) / 9, -y / 4.5],
+      ao(x, y), ao(x, y + 1), ao(x + 1, y + 1), ao(x + 1, y)); continue; }
+    const h = hOf(x, y), tu = (a, b) => [a / 6, -b / 6];
+    quad(top, [x, h, y], [x, h, y + 1], [x + 1, h, y + 1], [x + 1, h, y], [0, 1, 0], tu(x, y), tu(x, y + 1), tu(x + 1, y + 1), tu(x + 1, y));
+    // a face toward every lower neighbour, from its height up to ours
+    const sides = [[0, 1, [x, y + 1], [x + 1, y + 1], [0, 0, 1], x], [0, -1, [x + 1, y], [x, y], [0, 0, -1], x], [1, 0, [x + 1, y + 1], [x + 1, y], [1, 0, 0], y], [-1, 0, [x, y], [x, y + 1], [-1, 0, 0], y]];
+    for (const [dx, dy, [ax, az], [bx, bz], n, u0] of sides) {
+      const lo = hOf(x + dx, y + dy); if (lo >= h) continue;
+      const v0 = lo / 1.6, v1 = h / 1.6, open = lo === 0;
+      quad(face, [ax, lo, az], [bx, lo, bz], [bx, h, bz], [ax, h, az], n, [u0 / 4, v0], [(u0 + 1) / 4, v0], [(u0 + 1) / 4, v1], [u0 / 4, v1], open ? .5 : .8, open ? .5 : .8, 1, 1);
+      if (open) { const L = .13, Y = h + .003;   // the lit lip where a wall top meets the room below
+        const e = { '0,1': [[x, y + 1 - L], [x, y + 1], [x + 1, y + 1], [x + 1, y + 1 - L], .55, 1, 1, .55], '0,-1': [[x, y], [x, y + L], [x + 1, y + L], [x + 1, y], 1, .55, .55, 1],
+          '1,0': [[x + 1 - L, y], [x + 1 - L, y + 1], [x + 1, y + 1], [x + 1, y], .55, .55, 1, 1], '-1,0': [[x, y], [x, y + 1], [x + L, y + 1], [x + L, y], 1, 1, .55, .55] }[dx + ',' + dy];
+        const [A, B, C, D, ...k] = e; quad(lip, [A[0], Y, A[1]], [B[0], Y, B[1]], [C[0], Y, C[1]], [D[0], Y, D[1]], [0, 1, 0], tu(...A), tu(...B), tu(...C), tu(...D), ...k); }
+    }
+  }
+  const WALLMAT = { stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp };   // marks wall pixels, so see-through ghosts appear only behind walls
+  const mesh = (g, mat, cast) => { const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(g.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(g.n, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.u, 2));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(g.c, 3));
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = cast; scene.add(m); };
+  mesh(floor, new THREE.MeshLambertMaterial({ map: terrTex(ART.terrain.floor), vertexColors: true }), false);
+  const lidTex = terrTex(ART.terrain.top);
+  mesh(top, new THREE.MeshLambertMaterial({ map: lidTex, color: 0x5a4e57, emissive: 0x4a4352, emissiveMap: lidTex, emissiveIntensity: .6, ...WALLMAT }), true);
+  mesh(lip, new THREE.MeshLambertMaterial({ map: terrTex(ART.terrain.top), color: 0xb3a7b0, vertexColors: true, emissive: 0x1c1720, ...WALLMAT }), false);
+  mesh(face, new THREE.MeshLambertMaterial({ map: terrTex(ART.terrain.face), vertexColors: true, ...WALLMAT }), true);
+}
+// torch light: a small pool of point lights, moved each frame onto the torches nearest the camera
+const LIGHTS = Array.from({ length: 6 }, () => { const l = new THREE.PointLight(0xff9a46, 0, 7.5, 1.6); scene.add(l); return l; });
+const SPOTS = Array.from({ length: 3 }, () => { const s = new THREE.SpotLight(0xffa04a, 0, 9, 1.2, .75, 1.5);
+  s.castShadow = true; s.shadow.mapSize.set(LOW ? 512 : 1024, LOW ? 512 : 1024); s.shadow.bias = -.0006; s.shadow.normalBias = .04; s.shadow.radius = 4;
+  s.shadow.camera.near = .15; s.shadow.camera.far = 9; scene.add(s, s.target); return s; });
+// flames: a hot core and a soft halo over every torch, flickering; embers rise from the nearest ones
+const flameTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 128; const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 92, 2, 32, 80, 46); r.addColorStop(0, 'rgba(255,250,220,1)'); r.addColorStop(.25, 'rgba(255,190,80,.95)'); r.addColorStop(.6, 'rgba(255,90,20,.45)'); r.addColorStop(1, 'rgba(255,40,0,0)');
+  g.fillStyle = r; g.beginPath(); g.moveTo(32, 2); g.bezierCurveTo(58, 60, 60, 120, 32, 124); g.bezierCurveTo(4, 120, 6, 60, 32, 2); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.3, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+const additive = (map, color, opacity = 1) => new THREE.SpriteMaterial({ map, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+const FLAMES = TORCHES.map((t, i) => { const f = new THREE.Sprite(additive(flameTex, 0xffffff)), h = new THREE.Sprite(additive(glowTex, 0xff8a3a, .55));
+  f.center.set(.5, .1); f.position.set(t.x, t.y - .12, t.z); h.position.set(t.x, t.y + .05, t.z); h.scale.setScalar(1); scene.add(f, h); return { f, h, i }; });
+const EMBERS = (() => { const n = 28, geo = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), life = new Float32Array(n), vel = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: glowTex, vertexColors: true, size: .06, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  pts.frustumCulled = false; scene.add(pts); return { n, pos, life, vel, col, geo }; })();
+const DUST = (() => { const n = 20, geo = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), seed = new Float32Array(n);
+  for (let i = 0; i < n; i++) seed[i] = Math.random() * 100;
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: glowTex, color: 0xfff1d6, size: .03, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  pts.frustumCulled = false; scene.add(pts); return { n, pos, seed, geo }; })();
+function atmosphere(dt, now, near) {
+  for (const { f, h, i } of FLAMES) { const k = .85 + .15 * Math.sin(now / 70 + i * 3.1) + .08 * Math.sin(now / 23 + i * 7.7);
+    f.scale.set(.2 * k, .34 * (.9 + .2 * Math.sin(now / 55 + i)), 1); h.material.opacity = .25 * k; }
+  const E = EMBERS;
+  for (let i = 0; i < E.n; i++) {
+    E.life[i] -= dt;
+    if (E.life[i] <= 0) { const t = near[i % Math.min(4, near.length)]; if (!t) continue;
+      E.pos.set([t.x + (Math.random() - .5) * .12, t.y, t.z + (Math.random() - .5) * .12], i * 3);
+      E.vel.set([(Math.random() - .5) * .25, .5 + Math.random() * .6, (Math.random() - .5) * .25], i * 3); E.life[i] = .5 + Math.random() * .6; }
+    const k = Math.max(0, Math.min(1, E.life[i] / .6)); E.col.set([1 * k, .62 * k, .3 * k], i * 3);
+    E.pos[i * 3] += E.vel[i * 3] * dt + Math.sin(now / 300 + i) * .002; E.pos[i * 3 + 1] += E.vel[i * 3 + 1] * dt; E.pos[i * 3 + 2] += E.vel[i * 3 + 2] * dt;
+  }
+  E.geo.attributes.position.needsUpdate = E.geo.attributes.color.needsUpdate = true;
+  const D = DUST;
+  for (let i = 0; i < D.n; i++) { const sd = D.seed[i], t = now / 1000, a = sd * 7.3 + t * .05 * (1 + sd % 1), r = .15 + (sd * 13.7 % 1) * .95;
+    D.pos.set([ROPE.x + Math.cos(a) * r, ((sd * 3.1 + t * .06) % 2.6) + .1, ROPE.z + Math.sin(a) * r * .8], i * 3); }
+  D.geo.attributes.position.needsUpdate = true;
+}
+
+// the finished image: the scene renders to a float target, then one pass adds bloom, tone-maps, grades
+// (cool shadows, warm torchlight), vignettes, reddens the edges while she is chased, and adds a little grain
+const POST = (() => {
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, stencilBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  const bA = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false }), bB = bA.clone();
+  const qs = new THREE.Scene(), qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); qs.add(quad);
+  const vert = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
+  const mat = (frag, uniforms) => new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader: frag, depthTest: false, depthWrite: false });
+  const bright = mat(`uniform sampler2D t; varying vec2 vUv; void main() { vec3 c = texture2D(t, vUv).rgb; float l = max(c.r, max(c.g, c.b));
+    gl_FragColor = vec4(c * smoothstep(.7, 1.8, l), 1.); }`, { t: { value: null } });
+  const blur = mat(`uniform sampler2D t; uniform vec2 dir; varying vec2 vUv; void main() { vec3 c = texture2D(t, vUv).rgb * .227;
+    c += (texture2D(t, vUv + dir * 1.385).rgb + texture2D(t, vUv - dir * 1.385).rgb) * .316; c += (texture2D(t, vUv + dir * 3.23).rgb + texture2D(t, vUv - dir * 3.23).rgb) * .07;
+    gl_FragColor = vec4(c, 1.); }`, { t: { value: null }, dir: { value: new THREE.Vector2() } });
+  const fin = mat(`uniform sampler2D tScene, tBloom; uniform vec2 uRes; uniform float uTime, uExposure, uAlarm, uBloom; varying vec2 vUv;
+    vec3 aces(vec3 x) { return clamp((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14), 0., 1.); }
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    vec3 srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1. / 2.4)) - .055, step(.0031308, c)); }
+    void main() {
+      vec3 c = texture2D(tScene, vUv).rgb + texture2D(tBloom, vUv).rgb * uBloom;
+      c = aces(c * uExposure);
+      float l = dot(c, vec3(.2126, .7152, .0722));
+      c = mix(c, c * vec3(.88, .97, 1.04), (1. - smoothstep(.0, .35, l)) * .6);
+      c = mix(c, c * vec3(1.06, 1., .9), smoothstep(.4, 1., l) * .35);
+      vec2 q = (vUv - .5) * vec2(uRes.x / uRes.y, 1.);
+      float v = smoothstep(1.15, .3, length(q));
+      c *= mix(.38, 1., v);
+      c = mix(c, c * vec3(1.35, .5, .45) + vec3(.05, 0., 0.), uAlarm * (1. - v));
+      c = srgb(c);
+      c += (hash(floor(vUv * uRes) + fract(uTime * 7.) * 91.7) - .5) * .02;
+      gl_FragColor = vec4(c, 1.);
+    }`, { tScene: { value: rt.texture }, tBloom: { value: bA.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 },
+      uExposure: { value: 1.25 }, uAlarm: { value: 0 }, uBloom: { value: .6 } });
+  const pass = (m, target) => { quad.material = m; renderer.setRenderTarget(target); renderer.render(qs, qc); };
+  return {
+    fin,
+    px: 1, rtH: 1,
+    // portrait phones get a finer grid, so the sprites do not smear
+    setSize(w, h) { const px = this.px = Math.max(1, Math.round(h / (w < h ? 420 : 400))), W = Math.ceil(w / px), H = this.rtH = Math.ceil(h / px);
+      rt.setSize(W, H); bA.setSize(Math.max(1, W / 2 | 0), Math.max(1, H / 2 | 0)); bB.setSize(Math.max(1, W / 2 | 0), Math.max(1, H / 2 | 0)); fin.uniforms.uRes.value.set(W, H); },
+    render(t) {
+      renderer.setRenderTarget(rt); renderer.render(scene, camera);
+      bright.uniforms.t.value = rt.texture; pass(bright, bA);
+      for (let i = 0; i < 2; i++) {
+        blur.uniforms.t.value = bA.texture; blur.uniforms.dir.value.set((i + 1) / bA.width, 0); pass(blur, bB);
+        blur.uniforms.t.value = bB.texture; blur.uniforms.dir.value.set(0, (i + 1) / bA.height); pass(blur, bA);
+      }
+      fin.uniforms.uTime.value = t; pass(fin, null);
+    },
+  };
+})();
+const idolLight = new THREE.PointLight(0xffd36b, 4, 4.5, 1.8); idolLight.position.set(PEDESTAL.x, 1.6, PEDESTAL.z + .3); scene.add(idolLight);
+const carryLight = new THREE.PointLight(0xffd36b, 0, 3.2, 2); scene.add(carryLight);
+const candle = new THREE.PointLight(0xffc070, 2.2, 4, 1.8); candle.position.set(16.5, 1.3, 15.5); scene.add(candle);
+const day = new THREE.PointLight(0xcfe0ff, 4.2, 5.5, 1.6); day.position.set(ROPE.x, 3.2, ROPE.z); scene.add(day);
+
+// the 3D props: forge's GLBs, one mesh and one baked texture each, read by hand
+const GLB = {};
+let PACK = null;
+const SQUARE = { chair: 36.75, desk: 27.75, 'lever-down': 24, 'long-table': 42, 'urn-group': -19.75, 'weapon-rack': 37 };   // forge-godot data/prop-yaw.json   // props3d.json: every GLB, base64, in one file (artifacts do not serve .glb)
+async function loadGLB(name) {
+  const raw = atob(PACK[name]), u8 = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+  const buf = u8.buffer, dv = new DataView(buf), jl = dv.getUint32(12, true);
+  const j = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl))), bin = 20 + jl + 8;
+  const acc = i => { const a = j.accessors[i], v = j.bufferViews[a.bufferView], n = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[a.type];
+    const T = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array }[a.componentType];
+    return new T(buf, bin + (v.byteOffset || 0) + (a.byteOffset || 0), a.count * n); };
+  const pr = j.meshes[0].primitives[0], geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(acc(pr.attributes.POSITION), 3));
+  if (pr.attributes.NORMAL !== undefined) geo.setAttribute('normal', new THREE.BufferAttribute(acc(pr.attributes.NORMAL), 3)); else geo.computeVertexNormals();
+  geo.setAttribute('uv', new THREE.BufferAttribute(acc(pr.attributes.TEXCOORD_0), 2));
+  if (pr.indices !== undefined) geo.setIndex(new THREE.BufferAttribute(acc(pr.indices), 1));
+  if (SQUARE[name]) geo.rotateY(SQUARE[name] * Math.PI / 180);   // Tripo builds each model a few degrees turned; forge's table squares them
+  geo.computeBoundingBox();
+  const img = j.images[j.textures[j.materials[pr.material].pbrMetallicRoughness.baseColorTexture.index].source], v = j.bufferViews[img.bufferView];
+  const bmp = await createImageBitmap(new Blob([new Uint8Array(buf, bin + (v.byteOffset || 0), v.byteLength)], { type: img.mimeType }));
+  const tex = new THREE.Texture(bmp); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.needsUpdate = true;
+  GLB[name] = { geo, mat: new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .1 }) };
+}
+function outlineMat(w) { // an inverted hull pushed out along the normals: the same dark outline the pixel sprites have
+  const m = new THREE.MeshBasicMaterial({ color: 0x0c0a10, side: THREE.BackSide });
+  m.onBeforeCompile = sh => { sh.uniforms.uW = { value: w }; sh.vertexShader = 'uniform float uW;\n' + sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + normal * uW;'); };
+  m.customProgramCacheKey = () => 'outline'; return m;
+}
+function place(p) {
+  const g = GLB[p.m]; if (!g) return;
+  if (p.tall && !g.tallMat) { g.tallMat = g.mat.clone(); Object.assign(g.tallMat, { stencilWrite: true, stencilRef: 1, stencilZPass: THREE.ReplaceStencilOp }); }
+  const m = new THREE.Mesh(g.geo, p.tall ? g.tallMat : g.mat), bb = g.geo.boundingBox, hgt = bb.max.y - bb.min.y, s = p.h / hgt;
+  m.add(new THREE.Mesh(g.geo, outlineMat((p.light ? .012 : .035) / s)));
+  m.scale.setScalar(s); if (p.w) m.scale.z = s * p.w / ((bb.max.z - bb.min.z) * s);
+  m.rotation.y = Math.PI / 2 + (p.yaw || 0) * Math.PI / 180;   // the models face +x; turn them to the camera
+  m.position.set(p.x, -bb.min.y * s, p.z); m.castShadow = !p.light; m.receiveShadow = true; if (p.mesh) scene.remove(p.mesh); scene.add(m); p.mesh = m;
+}
+
+// the cellar door, the vault gate, the rope and the idol's case are built here
+const wood = new THREE.MeshLambertMaterial({ color: 0x6b4429 }), iron = new THREE.MeshLambertMaterial({ color: 0x2c2a2e }), brass = new THREE.MeshLambertMaterial({ color: 0xc9a14a, emissive: 0x3a2a08 });
+const doorPivot = new THREE.Group(); doorPivot.position.set(10, 0, DOOR.z - .08); scene.add(doorPivot);
+{ const leaf = new THREE.Group(); leaf.position.x = 1;
+  for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(.38, 1.66, .1), wood); b.position.set(-.8 + i * .4, .83, 0); leaf.add(b); }
+  for (const y of [.35, 1.3]) { const s = new THREE.Mesh(new THREE.BoxGeometry(2, .1, .14), iron); s.position.y = y; leaf.add(s); }
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(.18, .24, .16), brass); lock.position.set(.75, .9, .04); leaf.add(lock);
+  doorPivot.add(leaf); }
+const gate = new THREE.Group(); gate.position.set(22, 0, GATE.z - .1); scene.add(gate);
+{ for (let i = 0; i <= 7; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.75, 6), iron); b.position.set(.1 + i * .4, .875, 0); gate.add(b); }
+  for (const y of [.4, 1.0, 1.6]) { const b = new THREE.Mesh(new THREE.BoxGeometry(3, .07, .07), iron); b.position.set(1.5, y, 0); gate.add(b); } }
+{ const fade = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d'), r = g.createLinearGradient(0, 64, 0, 0);
+    r.addColorStop(0, '#fff'); r.addColorStop(.55, '#fff'); r.addColorStop(1, '#000'); g.fillStyle = r; g.fillRect(0, 0, 4, 64); return new THREE.CanvasTexture(c); })();
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(.03, .04, 2.6, 6, 1, true), new THREE.MeshLambertMaterial({ color: 0xb08a55, alphaMap: fade, transparent: true, emissive: 0x2a2014 }));
+  rope.position.set(ROPE.x, 1.3, ROPE.z); scene.add(rope);
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 4), rope.material); knot.position.set(ROPE.x, .32, ROPE.z); scene.add(knot);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.6, 1.05, 2.4, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xcfe0ff, alphaMap: fade, transparent: true, opacity: .06, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false }));
+  beam.position.set(ROPE.x, 1.2, ROPE.z); scene.add(beam);
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(1.5, 32), new THREE.MeshBasicMaterial({ color: 0xcfe0ff, map: glowTex, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pool.rotation.x = -Math.PI / 2; pool.position.set(ROPE.x, .02, ROPE.z); scene.add(pool); }
+for (const t of TGATES) { const w = t.tiles.length, g = t.mesh = new THREE.Group(); g.position.set(t.tiles[0][0], 0, t.tiles[0][1] + .9); scene.add(g);
+  for (let i = 0; .1 + i * .4 < w; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.75, 6), iron); b.position.set(.1 + i * .4, .875, 0); g.add(b); }
+  for (const y of [.4, 1.0, 1.6]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, .07, .07), iron); b.position.set(w / 2, y, 0); g.add(b); }
+  g.traverse(o => { o.castShadow = true; }); }
+const grate = new THREE.Group(); grate.position.set(GRATE.x + .04, 0, 8); scene.add(grate);
+{ for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, 1.2, 6), iron); b.position.set(0, .6, .14 + i * .24); grate.add(b); }
+  for (const y of [.3, .9]) { const b = new THREE.Mesh(new THREE.BoxGeometry(.06, .06, 1), iron); b.position.set(0, y, .5); grate.add(b); } }
+doorPivot.traverse(o => { o.castShadow = true; }); gate.traverse(o => { o.castShadow = true; });
+const glass = new THREE.Mesh(new THREE.BoxGeometry(.7, .85, .7), new THREE.MeshLambertMaterial({ color: 0xbfe3ff, transparent: true, opacity: .22, depthWrite: false, emissive: 0x223344 }));
+glass.position.set(PEDESTAL.x, PEDESTAL.h + .43, PEDESTAL.z); scene.add(glass);
+
+// cards: the characters and the idol are pixel art standing upright, stretched to undo the camera's tilt
+const silMats = [];
+// Characters face the camera square on (tilted back to its pitch), so nothing leans at the screen's edges; their depth
+// is pulled toward the camera so the wall behind does not cut into the top of a card that tilts over it.
+function nearer(mat, bias) {
+  mat.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>',
+    `#include <project_vertex>
+    { vec4 b = projectionMatrix * vec4(mvPosition.xy, mvPosition.z + ${bias.toFixed(2)}, 1.0); gl_Position.z = b.z / b.w * gl_Position.w; }`); };
+  mat.customProgramCacheKey = () => 'nearer' + bias;
+  return mat;
+}
+function card(texture, wpx, hpx, worldW, { stretch = STRETCH, foot = 0, sil = null, face = false } = {}) {
+  const worldH = worldW * hpx / wpx * (face ? 1 : stretch);
+  const geo = new THREE.PlaneGeometry(worldW, worldH); geo.translate(0, worldH / 2 - foot * worldH / hpx, 0);
+  const mat = new THREE.MeshLambertMaterial({ map: texture, alphaTest: .5, emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: .16,
+    transparent: face, depthWrite: !face });   // characters sort back to front instead of depth-fighting
+  const m = new THREE.Mesh(geo, face ? nearer(mat, 1.9) : mat);
+  if (face) { m.rotation.x = -ELEV;
+    const nrm = geo.attributes.normal; for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, Math.cos(ELEV), Math.sin(ELEV));   // faces up once tilted: shaded like the floor
+    m.castShadow = true; m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: texture, alphaTest: .5 }); }
+  if (sil !== null) { // seen through walls: a faint tinted copy drawn only where something nearer hides it
+    const sm = new THREE.MeshBasicMaterial({ map: texture, color: sil, transparent: true, opacity: .55, alphaTest: .5, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false,
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc, stencilZPass: THREE.KeepStencilOp });
+    const s = new THREE.Mesh(geo, face ? nearer(sm, 1.9) : sm); s.renderOrder = 10; m.add(s); silMats.push(sm);
+  }
+  m.cardH = worldH;
+  return m;
+}
+const propTex = pixTex(ART.props.src);
+function spriteOf(name, worldW) {
+  const r = ART.props.rects[name], t = propTex.clone();
+  t.repeat.set(r.w / ART.props.W, r.h / ART.props.H); t.offset.set(r.x / ART.props.W, 1 - (r.y + r.h) / ART.props.H);
+  return card(t, r.w, r.h, worldW, { foot: r.foot, stretch: 1.15 });
+}
+const idolCard = spriteOf('idol', .62); idolCard.position.set(PEDESTAL.x, PEDESTAL.h + .02, PEDESTAL.z + .05); scene.add(idolCard);
+const shadowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(0,0,0,.85)'); r.addColorStop(.5, 'rgba(0,0,0,.45)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c); })();
+const blob = size => { const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size * .6), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: .8, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.y = .015; m.renderOrder = -1; scene.add(m); return m; };
+
+// characters: sheets of 64px frames, rows by animation then direction (south round to north through east)
+const SHEETS = {};
+for (const [name, a] of Object.entries(ART.chars)) SHEETS[name] = { ...a, tex: pixTex(a.src) };
+const sheetFor = kind => SHEETS[kind + '2'] || SHEETS[kind];
+function actor(kind, worldW, sil) {
+  const S = sheetFor(kind), tex = S.tex.clone();
+  tex.repeat.set(S.fw / S.W, S.fh / S.H);
+  const mesh = card(tex, S.fw, S.fh, worldW, { foot: 0, sil, face: true });
+  scene.add(mesh);
+  return { kind, S, tex, mesh, shadow: blob(worldW * .42), anim: Object.keys(S.anims)[0], t: Math.random() * 10, face: Math.PI / 2, footSh: 0, lx: null, lz: null };
+}
+const OCT = { 0: [2, 0], 1: [1, 0], 2: [0, 0], 3: [1, 1], 4: [2, 1], 5: [3, 1], 6: [4, 0], 7: [3, 0] };   // east, south-east... as [row, mirrored]
+// PixelLab drew her crouch's 'south' turned to the south-west and its 'south-east' facing straight down, so the sneak
+// takes south from the south-east row, and both southern diagonals from the south row (mirrored for the south-east)
+const OCT_CROUCH = { ...OCT, 1: [0, 1], 2: [1, 0], 3: [0, 0] }, OCTS = { 'sk-sneak': OCT_CROUCH, 'crouched-walking': OCT_CROUCH };
+function frameOf(S, anim, face, t) {
+  const A = S.anims[anim] || S.anims[Object.keys(S.anims)[0]];
+  const [d, flip] = (OCTS[anim] || OCT)[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8];
+  return { col: Math.floor(t) % A.n, row: A.row + d, flip };
+}
+function pose(a, anim, fps, dt) {
+  if (a.anim !== anim) { a.anim = anim; a.t = 0; }
+  a.t += dt * fps;
+  const S = a.S, { col, row, flip } = frameOf(S, anim, a.face, a.t), du = S.fw / S.W, u = col * du, v = 1 - (row + 1) * S.fh / S.H;
+  a.tex.repeat.set(flip ? -du : du, S.fh / S.H); a.tex.offset.set(flip ? u + du : u, v);
+  const A = S.anims[anim] || S.anims[Object.keys(S.anims)[0]], feet = S.feet && S.feet[anim] ? S.feet[anim][row - A.row] : S.foot;
+  const sc = S.scale && S.scale[anim] || 1; a.mesh.scale.setScalar(sc);   // she stays one size whichever mode drew the animation
+  a.footSh = feet * a.mesh.cardH * sc / S.fh;   // this animation's feet sit this far up its canvas
+}
+// put a card's feet (not its canvas edge) on the floor: slide the tilted card down along its own length
+function stand(a, x, z) { const sh = a.footSh || 0; a.mesh.position.set(x, -sh * Math.cos(ELEV), z + sh * Math.sin(ELEV)); a.shadow.position.set(x, .015, z + .02); }
+// the walk cycle keeps pace with how far the feet actually travel
+function cadence(a, x, z, dt, n, stride) {
+  const v = a.lx === null || dt <= 0 ? 0 : Math.hypot(x - a.lx, z - a.lz) / dt; a.lx = x; a.lz = z;
+  return clamp(n * v / stride, 3, 22);
+}
+
+// floor marks: the guards' sight, the rings of his voice, and the ring he is about to make
+const RAYS = 40, RANGE = 6, HALF = 33 * Math.PI / 180;
+const coneMat = () => new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  uniforms: { color: { value: new THREE.Color(0x8fb4a8) }, alpha: { value: .14 } },
+  vertexShader: 'attribute float aD; attribute float aRim; varying float vD; varying float vRim; void main() { vD = aD; vRim = aRim; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform vec3 color; uniform float alpha; varying float vD; varying float vRim;
+    void main() { float a = alpha * (1. - .85 * vD) * smoothstep(0., .1, vD) + smoothstep(.96, 1., vRim) * alpha * 1.3;
+      gl_FragColor = vec4(color, a); }` });
+function makeCone() {
+  const geo = new THREE.BufferGeometry(), n = RAYS * 3;
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aD', new THREE.BufferAttribute(new Float32Array(n), 1)); geo.setAttribute('aRim', new THREE.BufferAttribute(new Float32Array(n), 1));
+  const m = new THREE.Mesh(geo, coneMat()); m.renderOrder = -3; m.frustumCulled = false; scene.add(m); return m;   // floor marks draw before the characters
+}
+const VOICE_COL = 0xecdfc3, SAFE_COL = 0x8fb4a8, HOT_COL = 0xff6a4a;   // his voice; a ring nobody would hear; a ring a guard would
+// His voice spreads as a ring that walls cut short: past a wall it carries 1/1.6 as far, which is exactly how far the
+// guards behind it hear him. So the ring on the floor is the truth.
+const WALLK = 1.6, RSEG = 72;
+function voiceShape(p, r) { const out = new Float32Array(RSEG);
+  for (let i = 0; i < RSEG; i++) { const w = rayLen(p, i / RSEG * 2 * Math.PI, r); out[i] = w >= r - .05 ? r : Math.max(w, r / WALLK); } return out; }
+function ringGeom() { const geo = new THREE.BufferGeometry(), n = RSEG * 3;
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); geo.setAttribute('aR', new THREE.BufferAttribute(new Float32Array(n), 1)); return geo; }
+function setRing(geo, radii, k) { const A = geo.attributes;
+  for (let i = 0, j = 0; i < RSEG; i++, j += 3) { const i2 = (i + 1) % RSEG, a0 = i / RSEG * 6.2832, a1 = i2 / RSEG * 6.2832, r0 = radii[i] * k, r1 = radii[i2] * k;
+    A.position.array.set([0, 0, 0, Math.cos(a1) * r1, 0, Math.sin(a1) * r1, Math.cos(a0) * r0, 0, Math.sin(a0) * r0], j * 3); A.aR.array.set([(r0 + r1) / 2, r1, r0], j); }   // wound to face up, or the camera culls it
+  A.position.needsUpdate = A.aR.needsUpdate = true; }
+const ringMat = dashed => new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
+  uniforms: { color: { value: new THREE.Color() }, alpha: { value: 0 }, spin: { value: 0 }, fill: { value: 0 } },
+  vertexShader: 'attribute float aR; varying vec2 vP; varying float vR; void main() { vP = position.xz; vR = aR; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform vec3 color; uniform float alpha, spin, fill; varying vec2 vP; varying float vR;
+    void main() { float d = length(vP), w = .12;
+      float band = smoothstep(vR - w, vR - w * .4, d) * (1. - smoothstep(vR - .015, vR + .005, d));
+      float wake = ${dashed ? 'fill * (.55 + .45 * smoothstep(.3, 1., d / max(vR, .01)))' : 'pow(clamp(d / max(vR, .01), 0., 1.), 5.) * .2'};
+      float dash = ${dashed ? 'step(.45, fract(atan(vP.y, vP.x) / 6.2832 * 64. + spin))' : '1.'};
+      float a = (band * dash + wake * (1. - band)) * alpha; if (a < .003) discard; gl_FragColor = vec4(color * 1.5, a); }` });
+const rings = [];
+function ring(p, r) {
+  const m = new THREE.Mesh(ringGeom(), ringMat(false)); m.material.uniforms.color.value.setHex(VOICE_COL); m.frustumCulled = false;
+  m.position.set(p.x, .03, p.z); m.renderOrder = -2; scene.add(m); rings.push({ m, radii: voiceShape(p, r), t: 0 });
+}
+const backArc = new THREE.Mesh(new THREE.RingGeometry(.45, 1.35, 24, 1, -1.22, 2.44).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xe6c25a, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+backArc.renderOrder = -2; scene.add(backArc);
+const reachGlow = new THREE.Mesh(new THREE.RingGeometry(.5, .62, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe6c25a, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+reachGlow.renderOrder = -2; scene.add(reachGlow);
+for (const s of SIGHTS) { const m = new THREE.Mesh(ringGeom(), ringMat(true)); setRing(m.geometry, new Float32Array(RSEG).fill(s.r), 1);   // gold: a sight
+  m.material.uniforms.color.value.setHex(0xe6c25a); m.position.set(s.x, .03, s.z); m.renderOrder = -2; m.frustumCulled = false; m.visible = false; scene.add(m); s.ring = m; }
+const preview = new THREE.Mesh(ringGeom(), ringMat(true)); preview.material.uniforms.fill.value = .16; preview.renderOrder = -2; preview.frustumCulled = false; preview.visible = false; scene.add(preview);
+
+// ---------------------------------------------------------------- sound
+let AC = null, narBus, guardBus, ambBus, BIN = null;
+const GROUPS = {};
+for (const name of Object.keys(CLIPS)) if (name[0] !== '_') (GROUPS[name.replace(/_\d+$/, '')] ||= []).push(name);
+const decoded = {};
+const buffer = name => decoded[name] ||= AC.decodeAudioData(BIN.slice(CLIPS[name].o, CLIPS[name].o + CLIPS[name].n))
+  .then(b => { if (CLIPS[name].voice === 'George') CLIPS[name].mouth = mouthOf(b); return b; });
+// Percival's mouth follows the sound he makes, read off the decoded clip itself so it keeps time with what plays:
+// every 50 ms, how loud he is opens it (shut, small, medium, wide), and a hiss (a lot of zero crossings) shows teeth
+const MOUTH_F = .05;
+function mouthOf(b) {
+  const x = b.getChannelData(0), n = Math.round(b.sampleRate * MOUTH_F), k = Math.floor(x.length / n), rms = new Float32Array(k), zc = new Float32Array(k);
+  for (let f = 0; f < k; f++) { let s = 0, z = 0;
+    for (let i = f * n; i < f * n + n; i++) { s += x[i] * x[i]; if (i && (x[i] >= 0) !== (x[i - 1] >= 0)) z++; }
+    rms[f] = Math.sqrt(s / n); zc[f] = z / MOUTH_F; }
+  const top = Math.max(...rms), act = [...rms].filter(v => v > top * .1).sort((a, b) => a - b), ref = act[Math.floor(act.length * .9)] || top || 1;
+  return Uint8Array.from(rms, (v, f) => { const r = v / ref;   // columns in the face sheet: 1 shut, 2 small, 3 medium, 4 wide, 6 teeth
+    return r < .12 ? 1 : zc[f] > 4500 && r < .5 ? 6 : r < .4 ? 2 : r < .85 ? 3 : 4; });
+}
+function prefetch(base) { if (!AC || !BIN) return; for (const g of Object.keys(GROUPS)) if (g === base || g.startsWith(base) && /\d$/.test(g)) GROUPS[g].forEach(n => buffer(n).catch(() => {})); }
+const bags = {};
+function draw(group) { // shuffle bag: every line of a group is heard before any repeats
+  const all = GROUPS[group]; if (!all) return null;
+  let b = bags[group]; if (!b || !b.length) { b = bags[group] = [...all].sort(() => Math.random() - .5); if (b.length > 1 && b[b.length - 1] === bags['_' + group]) b.reverse(); }
+  const n = b.pop(); bags['_' + group] = n; return n;
+}
+function startAudio() {
+  try { AC = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 }); } catch (e) { AC = new (window.AudioContext || window.webkitAudioContext)(); }
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}   // play past the iPhone's silent switch
+  const comp = AC.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 3; comp.connect(AC.destination);
+  narBus = AC.createGain(); narBus.connect(comp); guardBus = AC.createGain(); guardBus.connect(comp);
+  ambBus = AC.createGain(); ambBus.gain.value = .09; ambBus.connect(AC.destination);
+  const len = AC.sampleRate * 4, nb = AC.createBuffer(1, len, AC.sampleRate), d = nb.getChannelData(0); let last = 0;
+  for (let i = 0; i < len; i++) { last = (last + .02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.2; }
+  const src = AC.createBufferSource(); src.buffer = nb; src.loop = true;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240;
+  const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = .07; lg.gain.value = .035; lfo.connect(lg); lg.connect(ambBus.gain);
+  src.connect(lp); lp.connect(ambBus); src.start(); lfo.start();
+  for (const b of ['fx_step', 'fx_run', 'fx_alert', 'fx_keys', 'intro', 'oops0', 'goal1', 't_ring', 'n_hear', 'spotted3', 'chase3', 'caught3', 'blame1', 'g_see', 's_see', 'g_caught', 's_caught']) prefetch(b);
+}
+const TIER_VOL = [.5, .78, 1, 1.12];
+// every line also has a wall-clock deadline, so a stalled audio clock can never hold the game up
+function play(name, bus, vol) {
+  const node = { name, start: AC.currentTime + .03, secs: CLIPS[name].secs, stop: null, ended: false, deadline: performance.now() + (CLIPS[name].secs + 1.5) * 1000 };
+  buffer(name).then(b => {
+    if (node.cancelled) { node.ended = true; return; }
+    const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; g.gain.value = vol; s.connect(g); g.connect(bus);
+    node.start = AC.currentTime + .01; node.secs = b.duration; s.start(node.start);
+    s.onended = () => { node.ended = true; };
+    node.stop = () => { g.gain.setTargetAtTime(0, AC.currentTime, .015); try { s.stop(AC.currentTime + .08); } catch (e) {} };
+  }).catch(() => { node.ended = true; });
+  return node;
+}
+const over = node => node.ended || performance.now() > node.deadline;
+const hush = node => { if (!node || over(node)) return; node.stop ? node.stop() : (node.cancelled = true); node.ended = true; };
+function fx(group, vol = .6) { if (!AC || !BIN) return; const n = draw(group); if (n) play(n, guardBus, vol); }   // the world's own sounds
+
+// ---------------------------------------------------------------- Percival
+// Three rules, and nothing hidden. He says out loud whatever she does, after a visible breath. His voice carries to a
+// ring of one fixed size around her, which walls cut short (past a wall it carries 1/1.6 as far). Every guard inside
+// the ring hears, and goes to look at whatever he was describing. How close the guards are only changes how excited
+// he sounds, never how far he carries. Asides to the player are not out loud, so nobody hears those.
+const VOICE_R = 5, MUFFLED = .8;
+const tierAt = e => e < 2.5 ? 3 : e < 5 ? 2 : e < 8 ? 1 : 0;
+const N = { pending: null, queue: [], cur: null, pulse: 0, seen: false, lineId: 0, muffle: 0 };
+function drama() {
+  const P = G.P;
+  const chaser = G.guards.find(g => g.state === 'chase'); if (chaser) return { tier: 3, why: `${chaser.def.name} is chasing her` };
+  let best = 99, who = null;
+  for (const g of G.guards) {
+    if (g.sleeping) continue;   // a sleeping guard does not excite him, though he can still hear him close by
+    if (g.seesHer && g.sus > .3) return { tier: 3, why: `${g.def.name} has seen something` };
+    const e = effDist(g, P); if (e < best) { best = e; who = g; }
+  }
+  const tier = tierAt(best), n = Math.max(1, Math.round(best));
+  return { tier, eff: best, why: who && tier ? `${who.def.name} is ${n} step${n > 1 ? 's' : ''} away` : 'no guard is near' };
+}
+const reach = () => N.muffle > 0 ? MUFFLED : VOICE_R;
+const hearers = () => G.guards.filter(g => effDist(g, G.P) < reach());
+const names = gs => { const n = gs.map(g => g.def.name); return n.length > 2 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n.join(' and '); };
+const speaking = () => !!N.cur && !over(N.cur.node);
+const stopCur = () => { if (N.cur) hush(N.cur.node); };
+function trigger(base, cause, { breath = 2.6, prio = 2, tier = null, lure = null, deed = false, aside = false } = {}) {
+  if (G.over || !G.started) return;
+  prefetch(base);
+  const t = { base, cause, breath, left: breath, prio, tier, lure, deed, aside };
+  if (prio >= 4) { stopCur(); if (N.pending) N.queue.unshift(N.pending); N.pending = t; return; }
+  if (deed && !G.intro) { // a deed never waits behind chatter: it cuts off flavour lines and always gets its whole breath
+    if (speaking() && N.cur.prio < 3) stopCur();
+    if (N.pending && N.pending.prio < 3) { N.queue.unshift(N.pending); N.pending = null; }
+    if (!N.pending && !speaking()) { N.pending = t; return; }
+  }
+  if (!N.pending && !speaking() && !N.queue.length && !G.intro) { N.pending = t; return; }
+  if (N.queue.some(q => q.base === base) || N.pending && N.pending.base === base) return;
+  N.queue.push(t); N.queue.sort((a, b) => b.prio - a.prio); if (N.queue.length > 6) N.queue.length = 6;
+}
+function groupFor(base, tier) {
+  if (GROUPS[base]) return base;
+  for (const d of [0, -1, 1, -2, 2, -3, 3]) if (GROUPS[base + (tier + d)]) return base + (tier + d);
+  return null;
+}
+function speak(p) {
+  const tier = p.tier ?? drama().tier, muffled = N.muffle > 0, group = muffled ? 'mmph0' : groupFor(p.base, tier), name = group && draw(group); if (!name) return;
+  const c = CLIPS[name];
+  N.cur = { name, tier: c.tier, prio: p.prio, base: p.base, cause: muffled ? 'the idol is over his mouth' : p.cause, deed: p.deed, id: ++N.lineId, muffled, aside: !!p.aside && !muffled,
+    lure: p.lure || { x: G.P.x, z: G.P.z }, node: play(name, narBus, c.gain * TIER_VOL[c.tier]), text: c.text };
+  N.pulse = 0; G.stats.words += c.text.split(/\s+/).length;
+  if (p.deed && c.tier === 3 && !muffled) { G.stats.shouted++; G.tryShouted++; }
+  showSub(c.text, N.cur.aside ? 'a' : c.tier);
+  if (!N.seen) { N.seen = true; $('box').classList.remove('away'); }
+  if (c.tier === 3 && !muffled) G.shake = Math.max(G.shake, c.secs);
+}
+function narratorTick(dt) {
+  const P = G.P;
+  if (N.muffle > 0) { N.muffle -= dt; if (N.muffle <= 0) trigger('unmuff0', 'the idol came off his mouth', { breath: .3, prio: 1, tier: 0 }); }
+  if (N.pending) { N.pending.left -= dt; if (N.pending.left <= 0) { const p = N.pending; N.pending = null; speak(p); } }
+  else if (!speaking() && N.queue.length && !G.intro) { const q = N.queue.shift(); if (!q.deed) q.breath = Math.min(q.breath, 1.2); q.left = q.breath; N.pending = q; }
+  if (speaking()) { N.pulse -= dt; if (N.pulse <= 0) { N.pulse = .7; voicePulse(); } }
+  // sights: into the gold ring, and he reads the whole thing out. Never the same thing twice, even after a retry.
+  for (const s of SIGHTS) {
+    if (!sightOn(s) || G.intro || G.over || Math.hypot(P.x - s.x, P.z - s.z) > s.r) continue;
+    G.seen[s.id] = 1; if (G.save) G.save.seen[s.id] = 1;
+    s.parts.forEach((b, i) => trigger(b, `she walked up to ${s.name}`, { breath: i ? .5 : .3, prio: 2, lure: s.lure }));
+  }
+  // the stairs: past Stilts is a step done, and a place to start again from
+  if (!G.flags.past && G.open.g2 && P.z < 28.6 && !G.over) { G.flags.past = true; G.saveDue = true; goals(); }
+  // as she reaches each lesson, a word in her ear (not out loud, so no guard hears it), once
+  const st = STEPS[stage()];
+  if (st.aside && !G.told[st.aside] && !G.intro && !G.over && dist(P, st.cue) < 1.4) { G.told[st.aside] = 1; trigger(st.aside, 'he is telling you how it works', { breath: .3, prio: 1, tier: 0, aside: true }); }
+  const chasing = G.guards.some(g => g.state === 'chase');
+  if (chasing && !speaking() && !N.pending) trigger('chase3', 'she is being chased', { breath: .3, prio: 3, tier: 3 });
+  if (G.wasChased && !chasing && !G.over) { const g = G.guards.find(x => x.last); trigger('lost', 'she shook off the chase', { breath: 1, prio: 2, tier: 0, lure: g ? g.last : null }); }
+  G.wasChased = chasing;
+  // the checkpoint, once a deed's line is over and nobody is after her
+  if (G.saveDue && !N.pending && !speaking() && !N.queue.some(q => q.deed) && !chasing && !G.over) { G.saveDue = false; checkpoint(); }
+  if (G.items.idol && !G.shhReady && !N.pending && !speaking() && !N.queue.some(q => q.deed)) { G.shhReady = true; $('shh').hidden = false; shhHud(); }
+}
+function voicePulse() { // each pulse of his voice spreads a ring, and every guard inside it hears
+  if (G.over || N.cur.aside) return;
+  const c = N.cur, r = c.muffled ? MUFFLED : VOICE_R;
+  ring(G.P, r);
+  for (const g of G.guards) if (effDist(g, G.P) < r) hear(g, c);
+}
+
+// ---------------------------------------------------------------- the guards
+const LANTERNS = Array.from({ length: 3 }, () => { const l = new THREE.PointLight(0xffc070, 0, 3.4, 1.8); scene.add(l); return l; });
+const hasLine = (g, what) => !!GROUPS[g.voice + '_' + what];
+function makeGuard(def, i) {
+  const big = def.kind === 'gord', a = actor(def.kind, big ? 2.6 : 2.8, 0xff6a5a);
+  Object.assign(a.mesh.material, { stencilWrite: true, stencilRef: 2, stencilZPass: THREE.ReplaceStencilOp });
+  const start = def.post || def.route[0];
+  return { ...a, def, i, x: start[0], z: start[1], state: 'patrol', wp: 0, wait: 0, path: [], sus: 0, target: null, speed: def.speed || 1,
+    lookT: 0, lookI: 0, face: def.looks ? def.looks[0][0] : Math.PI / 2, heardAt: -99, sawAt: 0, searchT: 0, stun: 0, heardLine: 0, seesHer: false,
+    sleeping: !!def.sleeper, picked: def.pocket ? !!G.items[def.pocket] : false, voice: def.voice || (def.kind === 'gord' ? 'g' : 's'),
+    cone: makeCone(), tag: Object.assign(document.createElement('div'), { className: 'tag' }), tagKey: '', bubble: null };
+}
+function guardSay(g, what, full = false) {
+  const group = full ? what : hasLine(g, what) ? g.voice + '_' + what : g.voice + '_hear';
+  const name = draw(group); if (!name || !AC) return;
+  const c = CLIPS[name], d = dist(g, G.P), vol = c.gain * clamp(1.25 - d / 16, .25, 1) * (c.tier === 3 ? 1.1 : .85);
+  G.voices.push(play(name, guardBus, vol));
+  if (narBus) { narBus.gain.setTargetAtTime(.55, AC.currentTime, .06); clearTimeout(G.duck); G.duck = setTimeout(() => narBus.gain.setTargetAtTime(1, AC.currentTime, .2), c.secs * 1000); }
+  if (g.bubble) g.bubble.el.remove();
+  const el = document.createElement('div'); el.className = 'say';
+  el.innerHTML = `<b>${g.def.name}</b>`; el.append(c.text);
+  $('marks').append(el); g.bubble = { el, until: G.time + c.secs + .8 };
+}
+function investigate(g, at, speed) {
+  g.target = { x: at.x, z: at.z }; g.path = findPath(g, g.target); g.state = 'investigate'; g.speed = speed; g.searchT = 0;
+}
+const OBJECT = { pick: 'belt', unlock: 'door', lever: 'lever', idol: 'idol' };
+function hear(g, c) { // once per line: he goes to whatever Percival was describing
+  if (g.heardLine === c.id || g.deaf) return;
+  g.heardLine = c.id;
+  if (g.state === 'chase') return;
+  const fresh = g.state === 'patrol' || g.state === 'return', woke = g.sleeping;
+  g.sleeping = false;
+  if (c.base === 'pick' && c.lure.guard === g) {   // he pats his belt first, eyes down; then turns round to where the hand was
+    g.state = 'pat'; g.patT = 1.6; g.path = []; g.lookBase = Math.atan2(c.lure.her.z - g.z, c.lure.her.x - g.x); g.sweep = .7; }
+  else investigate(g, { x: c.lure.x + (Math.random() - .5) * .8, z: c.lure.z + (Math.random() - .5) * .8 }, c.tier >= 3 ? 2.2 : 1.7);
+  if (fresh || woke) { if (!G.intro) { G.stats.heard++; G.tryHeard++; } guardSay(g, woke ? 'wake' : OBJECT[c.base] || 'hear'); }
+}
+function notice(g) { // her footsteps: he turns to look
+  if (g.sleeping || g.state === 'chase' || g.state === 'investigate') return;
+  g.sus = Math.max(g.sus, .35); investigate(g, G.P, 1.2);
+}
+function chase(g) {
+  if (g.state === 'chase' || g.sleeping) return;
+  g.state = 'chase'; g.sus = 1; g.sawAt = G.time; g.last = { x: G.P.x, z: G.P.z }; g.path = []; g.stun = .65;
+  G.stats.spotted++; G.hold = null;
+  fx('fx_alert', .55); guardSay(g, 'see'); trigger('spotted3', `${g.def.name} spotted her`, { breath: 0, prio: 4, tier: 3 });
+}
+function stepTo(g, p, speed, dt) {
+  const dx = p.x - g.x, dz = p.z - g.z, d = Math.hypot(dx, dz);
+  if (d < .08) return true;
+  const s = Math.min(d, speed * dt); g.x += dx / d * s; g.z += dz / d * s;
+  g.face += angDiff(Math.atan2(dz, dx), g.face) * Math.min(1, dt * 8);
+  return d - s < .08;
+}
+function followPath(g, speed, dt) { if (!g.path.length) return true; if (stepTo(g, g.path[0], speed, dt)) g.path.shift(); return !g.path.length; }
+function guardTick(g, dt) {
+  const P = G.P, d = dist(g, P), def = g.def, alert = G.items.idol ? 1.25 : 1;
+  let moving = false;
+  const toP = Math.atan2(P.z - g.z, P.x - g.x), los = d < RANGE + 4 && sightLine(g, P);
+  const inCone = !g.sleeping && !g.groggy && g.state !== 'pat' && los && d < RANGE && Math.abs(angDiff(toP, g.face)) < HALF;
+  g.seesHer = inCone;
+  if (g.sleeping) g.sus = 0;
+  else if (g.state === 'chase') {
+    if (los) g.sawAt = G.time, g.last = { x: P.x, z: P.z };
+    if (G.time - g.sawAt > 2.2) { investigate(g, g.last, 2); g.sus = .6; }
+  } else if (inCone && !G.over && !G.cutscene) {
+    const rate = (.15 + 1.75 * lightAt(P)) * (P.mode === 'sneak' || P.mode === 'idle' ? .55 : P.mode === 'run' ? 1.5 : 1) * (1.45 - d / RANGE) * (g.state === 'patrol' ? 1 : 1.6);
+    g.sus = Math.min(1, g.sus + rate * dt * 1.3);
+    if (g.sus >= 1) chase(g);
+    else if (g.sus > .5 && (g.state === 'patrol' || g.state === 'return')) investigate(g, P, 1.2);
+  } else g.sus = Math.max(0, g.sus - .45 * dt);
+  // footsteps: walking close by or running nearby is heard; sneaking is not
+  const step = P.mode === 'walk' ? 2 : P.mode === 'run' ? 5 : 0;
+  if (step && !G.over && !G.cutscene && effDist(g, P) < step) notice(g);
+
+  if (g.sleeping) { /* dozing at his post */ }
+  else if (g.state === 'chase') {
+    if (G.time - (g.pathAt || 0) > .3) { g.pathAt = G.time; g.path = findPath(g, g.last || P); }
+    if (g.stun > 0) { g.stun -= dt; g.face += angDiff(toP, g.face) * Math.min(1, dt * 10); }
+    else { moving = true; followPath(g, 3.15, dt); }
+    if (d < .72) caught(g);
+  } else if (g.state === 'investigate') {
+    moving = true;
+    if (followPath(g, g.speed, dt)) { g.state = 'search'; g.searchT = 3.6; g.lookBase = g.face; g.sweep = 1.1; }
+  } else if (g.state === 'pat') {   // patting his belt, eyes down: he sees nothing until he turns round
+    g.patT -= dt; if (g.patT <= 0) { g.state = 'search'; g.searchT = 3.4; }
+  } else if (g.state === 'search') {   // he looks about, turning no faster than a man can
+    g.searchT -= dt; const want = g.lookBase + Math.sin((3.6 - g.searchT) * 1.9) * (g.sweep || 1.1);
+    g.face += clamp(angDiff(want, g.face), -3.2 * dt, 3.2 * dt);
+    if (g.searchT <= 0) { g.state = 'return'; g.path = findPath(g, def.post ? { x: def.post[0], z: def.post[1] } : nearestWp(g)); if (Math.random() < .6) guardSay(g, 'giveup'); }
+  } else if (g.state === 'return') {
+    moving = true;
+    if (followPath(g, 1.4 * alert, dt)) { g.state = 'patrol'; g.groggy = false; }
+  } else if (def.post) { // a sentry: stands still and turns to look about
+    g.lookT += dt; if (g.lookT > def.looks[g.lookI][1]) { g.lookT = 0; g.lookI = (g.lookI + 1) % def.looks.length; }
+    g.face += angDiff(def.looks[g.lookI][0], g.face) * Math.min(1, dt * 2.2);
+  } else if (g.wait > 0) { g.wait -= dt; g.face = g.pauseFace + Math.sin(g.wait * 2.2) * .45; }
+  else {
+    const [x, z] = def.route[g.wp]; moving = true;
+    if (stepTo(g, { x, z }, def.speed * alert, dt)) { const at = g.wp; g.wp = (at + 1) % def.route.length; g.wait = ((def.pauses ? def.pauses[at] : def.pause) || 0) / alert; g.pauseFace = g.face; }
+  }
+  const gf = moving ? cadence(g, g.x, g.z, dt, 6, g.state === 'chase' ? 1.5 : .95) : g.sleeping ? 2.5 : 5; if (!moving) { g.lx = g.x; g.lz = g.z; }
+  pose(g, moving ? 'walking-6-frames' : 'breathing-idle', gf, dt);
+  stand(g, g.x, g.z);
+  if (g.lantern) g.lantern.position.set(g.x + Math.cos(g.face + .9) * .45, 1.0, g.z + Math.sin(g.face + .9) * .45);
+  g.cone.visible = !g.sleeping && g.state !== 'pat';
+  if (g.cone.visible) drawCone(g);
+}
+function nearestWp(g) { let best = 0, bd = 1e9; g.def.route.forEach(([x, z], i) => { const d = Math.hypot(x - g.x, z - g.z); if (d < bd) { bd = d; best = i; } }); g.wp = best; return { x: g.def.route[best][0], z: g.def.route[best][1] }; }
+function drawCone(g) {
+  const A = g.cone.geometry.attributes, pos = A.position.array, dd = A.aD.array, rim = A.aRim.array;
+  let k = 0, prev = null, prevD = 0, prevRim = 0;
+  for (let i = 0; i <= RAYS; i++) {
+    const a = g.face - HALF + 2 * HALF * i / RAYS, l = rayLen(g, a, RANGE), p = [g.x + Math.cos(a) * l, .025, g.z + Math.sin(a) * l], r = l >= RANGE - .05 ? 1 : 0;
+    if (prev) { pos.set([g.x + Math.cos(g.face) * .3, .025, g.z + Math.sin(g.face) * .3], k * 3); pos.set(prev, k * 3 + 3); pos.set(p, k * 3 + 6);
+      dd.set([0, prevD, l / RANGE], k); rim.set([0, prevRim, r], k); k += 3; }
+    prev = p; prevD = l / RANGE; prevRim = r;
+  }
+  A.position.needsUpdate = A.aD.needsUpdate = A.aRim.needsUpdate = true;
+  const u = g.cone.material.uniforms;
+  u.color.value.setHex(g.state === 'chase' ? 0xe0503a : g.sus > .05 || g.state === 'investigate' || g.state === 'search' ? 0xffb44a : 0x8fb4a8);
+  u.alpha.value = g.state === 'chase' ? .24 : .15 + g.sus * .12;
+}
+
+// ---------------------------------------------------------------- Mouse
+const keys = new Set(), touch = { x: 0, z: 0, on: false, run: false, sneak: false, use: false };
+function makeMouse(at) {
+  const a = actor('mouse', 1.8 * sheetFor('mouse').fw / 64, 0xb48cff);   // the same size on screen whatever canvas her frames came on
+  Object.assign(a.mesh.material, { stencilWrite: true, stencilRef: 0, stencilZPass: THREE.ReplaceStencilOp });
+  const gm = new THREE.MeshBasicMaterial({ map: a.tex, color: 0xb48cff, transparent: true, opacity: .55, alphaTest: .5, depthTest: false, depthWrite: false, fog: false,
+    stencilWrite: true, stencilRef: 2, stencilFunc: THREE.EqualStencilFunc, stencilZPass: THREE.KeepStencilOp });
+  const ghost = new THREE.Mesh(a.mesh.geometry, gm); ghost.renderOrder = 11; a.mesh.add(ghost);
+  return { ...a, x: at.x, z: at.z, mode: 'idle', still: true, room: roomAt(at) };
+}
+const SPEED = { sneak: 1.5, walk: 2.5, run: 4.3 };
+const carried = spriteOf('idol', .42); carried.visible = false; scene.add(carried);
+const inCrawl = p => CRAWL.some(([x, y]) => Math.floor(p.x) === x && Math.floor(p.z) === y);
+function mouseTick(dt) {
+  const P = G.P, x0 = P.x, z0 = P.z;
+  let ix = 0, iz = 0;
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) ix--; if (keys.has('KeyD') || keys.has('ArrowRight')) ix++;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) iz--; if (keys.has('KeyS') || keys.has('ArrowDown')) iz++;
+  let mag = Math.hypot(ix, iz), mode = 'walk';
+  if (touch.sneak) mode = 'sneak';   // Shift, or the Sneak button, turns sneaking on and off
+  if (keys.has('Space')) mode = 'run';
+  if (touch.on) { ix = touch.x; iz = touch.z; mag = Math.hypot(ix, iz); mode = touch.run ? 'run' : touch.sneak || mag < .6 ? 'sneak' : 'walk'; }
+  if (G.hold && G.hold.still) mag = 0;            // unlocking, pulling, taking: she stands still
+  if (G.hold && G.hold.kind === 'pick' || inCrawl(P)) mode = 'sneak';   // the crawlspace is too low for anything else
+  if (G.over || G.cutscene) mag = 0;
+  if (mag > .05) {
+    const n = Math.hypot(ix, iz) || 1, s = SPEED[mode] * dt;
+    move(P, ix / n * s, iz / n * s);
+    for (const g of G.guards) { const dx = P.x - g.x, dz = P.z - g.z, d = Math.hypot(dx, dz);
+      if (d < .55 && d > .001) { const nx = g.x + dx / d * .55, nz = g.z + dz / d * .55; move(P, nx - P.x, nz - P.z); } }
+    P.face += angDiff(Math.atan2(iz, ix), P.face) * Math.min(1, dt * 14);
+  }
+  P.still = Math.hypot(P.x - x0, P.z - z0) < SPEED.sneak * dt * .3;   // pushing into a wall is still standing still
+  P.mode = P.still ? 'idle' : mode;
+  P.stepT = (P.stepT || 0) - dt;
+  if (P.stepT <= 0 && (P.mode === 'walk' || P.mode === 'run')) { P.stepT = P.mode === 'run' ? .24 : .36; fx(P.mode === 'run' ? 'fx_run' : 'fx_step', P.mode === 'run' ? .42 : .22); }
+  const An = P.S.anims, anim = { idle: 'breathing-idle', sneak: An['sk-sneak'] ? 'sk-sneak' : 'crouched-walking', walk: An['sk-walk'] ? 'sk-walk' : 'walking-6-frames',
+    run: An['sk-run'] ? 'sk-run' : 'running-6-frames' }[P.mode];
+  const nFr = (P.S.anims[anim] || {}).n || 6, fps = P.mode === 'idle' ? 5 : cadence(P, P.x, P.z, dt, nFr, { sneak: .8, walk: 1.05, run: 1.7 }[P.mode]);
+  if (P.mode === 'idle') { P.lx = P.x; P.lz = P.z; }
+  pose(P, anim, fps, dt);
+  stand(P, P.x, P.z);
+  if (G.items.idol) { carried.position.set(P.x, 1.85 + Math.sin(G.time * 3) * .05, P.z + .05); carryLight.position.set(P.x, 1.2, P.z); }
+  const room = roomAt(P);
+  if (room !== P.room) P.room = room;
+}
+function move(P, dx, dz) {
+  const R = .28, hit = (x, z) => { for (const [ox, oz] of [[-R, -R], [R, -R], [-R, R], [R, R]]) if (!walkable(Math.floor(x + ox), Math.floor(z + oz))) return true; return false; };
+  if (!hit(P.x + dx, P.z)) P.x += dx; if (!hit(P.x, P.z + dz)) P.z += dz;
+}
+
+// what E does here, in order: a pocket, the thing the job needs, then junk
+function pickable() {
+  const P = G.P;
+  for (const g of G.guards) if (g.def.pocket && !g.picked && !g.sleeping && g.state === 'patrol' && dist(g, P) < 1.35 &&
+    Math.abs(angDiff(Math.atan2(P.z - g.z, P.x - g.x), g.face)) > 1.9) return g;
+  return null;
+}
+function interactable() {
+  const P = G.P, g = pickable();
+  if (g) { const turning = g.def.looks && g.def.looks[g.lookI][1] - g.lookT < .9;
+    return { kind: 'pick', g, need: .9, text: ['Hold E', `Pick ${g.def.name}'s pocket`, turning ? 'He is about to turn' : 'Keep up with him while you hold'], still: false }; }
+  const st = STEPS[stage()], pg = st.pocket && guard(st.pocket);
+  if (pg && !pg.picked && dist(pg, P) < 3.4) return { kind: 'info', text: ['', `Get behind ${pg.def.name} to pick his pocket`,
+    pg.state === 'patrol' ? 'Sneak into the gold arc at his back, then hold E' : 'He is on guard. Let him settle first'] };
+  const sti = guard('Stilts');
+  if (!G.flags.past && sti.state === 'patrol' && dist(sti, P) < 1.8) return { kind: 'info', text: ['', 'Stilts is blocking the stairs', 'Get Percival talking about something across the room'] };
+  if (!G.door && dist(P, { x: DOOR.x, z: DOOR.z + .5 }) < 1.4)
+    return G.items.cellar ? { kind: 'unlock', need: .9, text: ['Hold E', 'Unlock the archive door'], still: true, at: { x: DOOR.x, z: DOOR.z + .5 } } : { kind: 'hint', base: 'h_door0', text: ['E', 'Try the archive door'], at: { x: DOOR.x, z: DOOR.z + .5 } };
+  if (!G.gate && dist(P, { x: GATE.x, z: GATE.z + .5 }) < 1.6) return { kind: 'hint', base: 'h_gate0', text: ['E', 'Try the vault gate'] };
+  if (!G.gate && dist(P, { x: GRATE.x - .5, z: GRATE.z }) < 1.2) return { kind: 'hint', base: 'h_grate0', text: ['E', 'Try the grate'] };
+  for (const L of LEVERS) if (!pulled(L) && dist(P, { x: L.x, z: L.z + .7 }) < 1.3) return { kind: 'lever', L, need: .6, text: ['Hold E', 'Pull the lever'], still: true, at: { x: L.x, z: L.z + .4 } };
+  if (!G.items.idol && dist(P, { x: PEDESTAL.x, z: PEDESTAL.z + .7 }) < 1.3)
+    return G.items.case ? { kind: 'idol', need: .8, text: ['Hold E', 'Open the case and take the Idol'], still: true, at: { x: PEDESTAL.x, z: PEDESTAL.z + .4 } } : { kind: 'hint', base: 'h_case0', text: ['E', 'Try the case'], at: { x: PEDESTAL.x, z: PEDESTAL.z + .4 } };
+  if (dist(P, ROPE) < 1.2) return G.items.idol ? { kind: 'rope', need: .8, text: ['Hold E', 'Climb the rope out'], still: true, at: ROPE } : { kind: 'hint', base: 'h_rope0', text: ['E', 'Look up the rope'], at: ROPE };
+  for (const s of SIGHTS) if (sightOn(s) && Math.hypot(P.x - s.x, P.z - s.z) < s.r + 1.3)
+    return { kind: 'info', text: ['', cap(s.name), 'Step in and Percival reads it all out'] };
+  let best = null, bd = 1.35;
+  for (const p of PROPS) if (p.dull) { const d = Math.hypot(P.x - p.x, P.z - p.z); if (d < bd) { bd = d; best = p; } }
+  if (best) return { kind: 'dull', p: best, at: { x: best.x, z: best.z }, text: ['E', `Examine ${best.name}`] };
+  return null;
+}
+const SAID = new Set(['pick', 'unlock', 'lever', 'idol', 'dull', 'hint']);   // things he will say out loud: the ring shows before she does them
+function pressUse() {
+  if (!G.started || G.over || G.paused) return;
+  const it = interactable(); if (!it) return;
+  if (it.kind === 'info') return;
+  if (it.kind === 'dull') return examine(it.p);
+  if (it.kind === 'hint') { if (it.base === 'h_door0') fx('fx_rattle', .45); if (G.time - (G.hintAt[it.base] || -99) > 10) { G.hintAt[it.base] = G.time; trigger(it.base, 'she tried something shut', { breath: .2, prio: 1, tier: 0 }); } return; }
+  G.hold = { ...it, t: 0 };
+}
+function releaseUse() { G.hold = null; }
+function holdTick(dt) {
+  const h = G.hold; if (!h) return;
+  const now = interactable();
+  if (!now || now.kind !== h.kind || (h.kind === 'pick' && now.g !== h.g)) { G.hold = null; return; }
+  h.t += dt; if (h.t < h.need) return;
+  G.hold = null;
+  if (h.kind === 'pick') { h.g.picked = true; G.items[h.g.def.pocket] = true; fx('fx_keys', .35); deed('pick', `she picked ${h.g.def.name}'s pocket`, { x: h.g.x, z: h.g.z, guard: h.g, her: { x: G.P.x, z: G.P.z } }); }
+  if (h.kind === 'unlock') { G.door = true; setShut(DOOR_TILES, 0); fx('fx_lock', .55); deed('unlock', 'she unlocked the archive door', { x: DOOR.x, z: DOOR.z + .6 }); }
+  if (h.kind === 'lever') { const L = h.L; fx('fx_lever', .6); L.m = 'lever-down'; place(L);
+    if (L.lever === 'gate') { G.gate = true; setShut(GATE_TILES, 0); setShut(GRATE_TILES, 0); deed('lever', 'she pulled the lever', { x: GATE.x, z: GATE.z - .6 }); }
+    else { G.open[L.lever] = true; setShut(TGATES.find(t => t.id === L.lever).tiles, 0); deed('tlever', 'she pulled the lever', { x: L.x, z: L.z + .6 }, L.lever === 'g1' ? 1 : null);
+      if (L.lever === 'g1') trigger('t_ring', 'he is telling you how it works', { breath: .4, prio: 1, tier: 0, aside: true }); } }
+  if (h.kind === 'idol') { fx('fx_idol', .5); G.items.idol = true; idolCard.visible = false; glass.visible = false; idolLight.intensity = 0; carried.visible = true; carryLight.intensity = 3;
+    deed('idol', 'she took the idol', { x: PEDESTAL.x, z: PEDESTAL.z + .8 }); }
+  if (h.kind === 'rope') { fx('fx_rope', .6); escape(); }
+}
+function deed(base, cause, lure, tier = null) { G.saveDue = true; G.stats.deeds++; goals(); trigger(base, cause, { breath: 2.6, prio: 3, deed: true, lure, tier }); }
+function examine(p) { // he describes it, out loud like anything else, and whoever hears goes to look at it
+  G.stats.examined++; p.looks = (p.looks || 0) + 1;
+  trigger(p.looks > 1 ? (Math.random() < .5 ? 'again0' : 'bore0') : p.dull, `she examined ${p.name}`, { breath: 2, prio: 2, tier: 0, lure: { x: p.x, z: p.z } });
+}
+function pressShh() { // the Idol of Silence, clamped over his mouth
+  if (!G.started || G.over || G.paused || !G.items.idol || G.shh <= 0 || N.muffle > 0 || !G.shhReady) return;
+  G.shh--; N.muffle = 8; shhHud();
+  if (speaking()) { stopCur(); speak({ base: 'mmph0', cause: 'the idol is over his mouth', prio: 2, tier: 0 }); }
+}
+function shhHud() { $('shhN').textContent = G.shh; $('shh').classList.toggle('spent', G.shh <= 0); $('bShh').hidden = !G.shhReady; }
+
+// ---------------------------------------------------------------- the job, checkpoints, endings
+const G = { started: false, over: false, intro: false, cutscene: false, time: 0, shake: 0, seen: {}, told: {}, stats: null, guards: [], P: null, items: {}, door: false, gate: false,
+  open: {}, flags: {}, hold: null, hintAt: {}, save: null, runs: 0, runId: 0, saveDue: false, wasChased: false, shh: 2, voices: [], totalTime: 0 };
+const stage = () => { const i = STEPS.findIndex(s => !s.done()); return i < 0 ? STEPS.length - 1 : i; };
+function checkpoint() { G.save = { items: { ...G.items }, door: G.door, gate: G.gate, open: { ...G.open }, flags: { ...G.flags }, seen: { ...G.seen }, told: { ...G.told }, shh: G.shh, stage: stage() }; }
+const waitFor = (cond, max, run) => new Promise(res => { const t0 = performance.now(); const f = () => (run !== G.runId || cond() || performance.now() - t0 > max) ? res() : requestAnimationFrame(f); f(); });
+function reset(from) {
+  G.runId++;
+  for (const g of G.guards) { scene.remove(g.mesh, g.shadow, g.cone); g.tag.remove(); g.bubble && g.bubble.el.remove();
+    for (const m of [g.mesh, g.shadow, g.cone]) { m.geometry.dispose(); (Array.isArray(m.material) ? m.material : [m.material]).forEach(x => x.dispose()); } }
+  if (G.P && G.P.mesh) { scene.remove(G.P.mesh, G.P.shadow); G.P.mesh.material.dispose(); }
+  silMats.length = 0;
+  for (const v of G.voices) hush(v); G.voices = [];
+  const s = from || { items: {}, door: false, gate: false, open: {}, flags: {}, seen: {}, told: {} };
+  G.items = { ...s.items }; G.door = s.door; G.gate = s.gate; G.open = { ...s.open }; G.flags = { ...s.flags }; G.seen = { ...s.seen }; G.told = { ...s.told };
+  setShut(DOOR_TILES, G.door ? 0 : 1); setShut(GATE_TILES, G.gate ? 0 : 1); setShut(GRATE_TILES, G.gate ? 0 : 1);
+  for (const t of TGATES) setShut(t.tiles, G.open[t.id] ? 0 : 1);
+  for (const L of LEVERS) { L.m = pulled(L) ? 'lever-down' : 'lever-up'; place(L); }
+  idolCard.visible = glass.visible = !G.items.idol; idolLight.intensity = G.items.idol ? 0 : 4; carried.visible = !!G.items.idol; carryLight.intensity = G.items.idol ? 3 : 0;
+  G.P = makeMouse(STEPS[stage()].spawn); G.guards = GUARDS.map(makeGuard); G.guards.forEach(g => $('marks').append(g.tag));
+  let li = 0; for (const g of G.guards) { g.lantern = g.def.lantern ? LANTERNS[li++] : null; }
+  LANTERNS.forEach((l, i) => { l.intensity = i < li ? 2.4 : 0; });
+  G.over = false; G.won = false; G.time = 0; G.shake = 0; G.hold = null; G.hintAt = {}; G.saveDue = false; G.wasChased = false; G.intro = false; G.cutscene = false;
+  G.shh = s.shh ?? 2; G.shhReady = !!G.items.idol; G.tryHeard = 0; G.tryShouted = 0; shhHud(); $('shh').hidden = !G.shhReady;
+  if (!from) { G.stats = { words: 0, heard: 0, spotted: 0, examined: 0, deeds: 0, tries: 1, shouted: 0 }; G.totalTime = 0; } else G.stats.tries++;
+  stopCur(); N.cur = null; Object.assign(N, { pending: null, queue: [], muffle: 0 });
+  for (const p of PROPS) p.looks = 0;
+  checkpoint(); $('end').hidden = true; $('pause').hidden = true; $('app').classList.remove('carded'); G.paused = false; goals();
+}
+async function overture(run) { // a little silence; his intro; Nod, through the gate, hears it and comes to look; then Percival realises
+  G.intro = true; G.cutscene = true;
+  const nod = guard('Nod'), gone = () => run !== G.runId;
+  nod.deaf = true;
+  await waitFor(() => false, 1500, run); if (gone()) return;
+  speak({ base: 'intro', cause: 'he is introducing himself', prio: 1, tier: 1 });
+  await waitFor(() => !speaking(), 14000, run); if (gone()) return;
+  nod.groggy = true; investigate(nod, { x: 21.9, z: 42.6 }, 1.6); guardSay(nod, 'hear');   // up to the bars, peering in; he cannot make her out
+  await waitFor(() => nod.state === 'return' || nod.state === 'patrol', 14000, run); if (gone()) return;
+  nod.deaf = false; G.cutscene = false;   // she may move now
+  await waitFor(() => G.voices.every(v => over(v)), 4000, run); if (gone()) return;
+  speak({ base: 'oops0', cause: 'he realised Nod heard him', prio: 1, tier: 0, aside: true });
+  await waitFor(() => !speaking(), 12000, run); if (gone()) return;
+  G.intro = false;
+  trigger('goal1', 'he is telling you what to do', { breath: .3, prio: 1, tier: 0, aside: true });
+}
+function begin(from) {
+  reset(from); G.started = true; for (const id of ['goal', 'scrimTop', 'scrimBot', 'help', 'keys']) $(id).hidden = false; $('touch').hidden = !COARSE;
+  if (G.runs++ === 0) overture(G.runId);
+  else trigger('restart', 'a fresh start', { breath: .6, prio: 1, tier: 1, aside: true });
+}
+function after(fn, run) { const c = N.cur; waitFor(() => !c || over(c.node) || N.cur !== c, 15000, run).then(() => { if (run === G.runId) fn(); }); }
+function caught(g) {
+  if (G.over) return;
+  fx('fx_caught', .7); guardSay(g, 'caught'); N.queue = []; N.pending = null; G.over = true; G.hold = null;
+  stopCur(); speak({ base: 'caught3', cause: `${g.def.name} caught her`, prio: 4, tier: 3 });
+  const run = G.runId; after(() => { speak({ base: 'blame1', cause: 'he is blaming her', prio: 1, tier: 1 }); endCard(false); }, run);
+}
+const RATINGS = [['Ghost', 'rev_ghost', 'Not one guard heard him.'], ['Whisper', 'rev_whisper', 'Heard a time or two.'],
+  ['Page-turner', 'rev_page', 'Guards everywhere.'], ['Bestseller', 'rev_best', 'Shouted from the rooftops.']];
+const rating = () => { const h = G.tryHeard, sh = G.tryShouted; return RATINGS[h === 0 ? 0 : h <= 3 ? 1 : sh < 2 && h < 10 ? 2 : 3]; };   // the winning try's
+function escape() {
+  if (G.over) return;
+  G.over = true; G.won = true; N.queue = []; N.pending = null; G.hold = null;
+  stopCur(); fx('fx_win', .55); speak({ base: 'win3', cause: 'she escaped', prio: 4, tier: 3 });
+  const run = G.runId;
+  after(() => { speak({ base: 'win1', cause: 'the end', prio: 1, tier: 1 }); endCard(true);
+    after(() => speak({ base: rating()[1], cause: 'his review', prio: 1, tier: 1 }), run); }, run);
+}
+function endCard(won) {
+  const s = G.stats, t = Math.floor(G.totalTime || 0), r = rating();
+  $('endHead').textContent = won ? 'Escaped' : 'Caught';
+  $('endHead').style.color = won ? 'var(--gilt)' : 'var(--crimson)';
+  $('endRule').textContent = won ? "Percival's review" : `Back to: ${STEPS[G.save.stage ?? 0].goal}`;
+  $('endLine').textContent = won ? `${r[0]}. ${r[2]}` : 'Percival is sure it was not his fault.';
+  $('stats').innerHTML = [['Time', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`], ['Tries', s.tries], ['Words Percival said', s.words],
+    ['Times a guard heard him', s.heard], ['Times she was spotted', s.spotted], ['Junk examined', s.examined]].map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
+  $('again').hidden = won; $('over').textContent = won ? 'Play again' : 'Start over';
+  $('end').hidden = false; $('app').classList.add('carded'); setTimeout(() => (won ? $('over') : $('again')).focus(), 50);
+  const ef = $('endFace').getContext('2d'); ef.imageSmoothingEnabled = false; ef.clearRect(0, 0, 96, 96);
+  ef.drawImage(narImg, NAR.rest * NAR.cell, (NAR.rows[won ? 'happy' : 'sad'] ?? 0) * NAR.cell, NAR.cell, NAR.cell, 0, 0, 96, 96);
+}
+function goals() {
+  const st = STEPS[stage()], part = STEPS.filter(s => s.part === st.part);
+  if ($('goalText').textContent !== st.goal) { $('goal').classList.remove('flash'); void $('goal').offsetWidth; $('goal').classList.add('flash'); }
+  $('goalStep').textContent = `${st.part} · ${part.indexOf(st) + 1} of ${part.length}`; $('goalText').textContent = st.goal;
+  $('goalRule').textContent = st.rule || ''; $('goalRule').hidden = !st.rule;
+  $('keys').style.opacity = st.part === STEPS[0].part ? 1 : 0;   // the keys stay up while she learns
+}
+
+// ---------------------------------------------------------------- the box, the subtitles, the marks
+const face = $('face').getContext('2d'); face.imageSmoothingEnabled = false;
+const NAR = ART.narrator, narImg = IMG.get(NAR.src);
+const MOOD_ROW = ['sad', 'neutral', 'happy', 'surprised'];
+const pixIcon = (rows, colors) => { const h = rows.length, w = rows[0].length; let r = '';
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (colors[ch]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[ch]}"/>`; }));
+  return `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">${r}</svg>`; };
+const KEY_SVG = pixIcon(['..kkk.........', '.k...k........', 'k..d..kkkkkkkkk', 'k..d..k...k.k..', '.k...k....k.k..', '..kkk..........'], { k: '#e6c25a', d: '#3c2814' });
+const EAR_SVG = pixIcon(['...rrrr..', '..r....r.', '.r..rr..r', '.r.r..r.r', '.r.r..r.r', '....rr..r', '.......r.', '.....rr..', '....r....'], { r: '#ff8a6a' });
+const earSvg = c => EAR_SVG.replaceAll('#ff8a6a', c);
+const OBJ_ICONS = {
+  key: KEY_SVG,
+  door: pixIcon(['.gggg.', 'g....g', 'g....g', 'gggggg', 'gg..gg', 'gg..gg', 'gggggg'], { g: '#e6c25a' }),
+  lever: pixIcon(['....gg', '...gg.', '..gg..', '.gg...', 'gggggg', 'gggggg'], { g: '#e6c25a' }),
+  idol: pixIcon(['..gg..', '.gggg.', '..gg..', '.gggg.', 'gggggg', '.gggg.'], { g: '#e6c25a' }),
+  up: pixIcon(['..gg..', '.gggg.', 'gggggg', '..gg..', '..gg..', '..gg..'], { g: '#e6c25a' }),
+  arrow: pixIcon(['..g...', '..gg..', 'gggggg', 'gggggg', '..gg..', '..g...'], { g: '#e6c25a' }) };
+const MARKS = { '!': pixIcon(['.rr.', '.rr.', '.rr.', '.rr.', '.rr.', '....', '.rr.', '.rr.'], { r: '#e0503a' }),
+  '?': pixIcon(['.aaa.', 'a...a', '....a', '...a.', '..a..', '.....', '..a..', '..a..'], { a: '#ffc15a' }),
+  z: pixIcon(['tttt.', '...t.', '..t..', '.t...', 'tttt.'], { t: '#8fb4a8' }) };
+function showSub(text, tier) { const p = $('sub').firstElementChild; p.className = 't' + tier + (tier === 3 ? ' shake' : ''); p.textContent = tier === 3 ? text.toUpperCase() : text; p.style.opacity = 1; }
+function drawFace(ctx, tier, cur) {
+  ctx.clearRect(0, 0, 96, 96);
+  const row = NAR.rows[MOOD_ROW[tier]] ?? 0; let col = NAR.rest;
+  const m = cur && AC && CLIPS[cur.name].mouth;
+  if (m) { const f = Math.floor((AC.currentTime - cur.node.start) / MOUTH_F); if (f >= 0 && f < m.length) col = m[f]; }
+  ctx.drawImage(narImg, col * NAR.cell, row * NAR.cell, NAR.cell, NAR.cell, 0, 0, 96, 96);
+  if (N.muffle > 0) { const r = ART.props.rects.idol; ctx.drawImage(IMG.get(ART.props.src), r.x, r.y, r.w, r.h, 30, 26, 36, 48); }
+}
+let hudKey = '', sneakShown = null;
+function hud(dt) {
+  const sn = touch.sneak && G.started && !G.over;   // sneaking stays on until Shift again, so say so
+  if (sn !== sneakShown) { sneakShown = sn; $('sneakOn').hidden = !sn; $('bSneak').classList.toggle('on', sn); }
+  const cur = speaking() ? N.cur : null, pend = N.pending, loud = cur && !cur.aside;
+  drawFace(face, cur ? cur.tier : pend ? 2 : 1, cur);
+  const shout = G.shake > 0; G.shake = Math.max(0, G.shake - dt); $('box').classList.toggle('shake', shout);
+  // what E would do, and whether he would say it out loud
+  const it = G.started && !G.over ? interactable() : null, said = it && SAID.has(it.kind) && !loud && !pend;
+  const who = hearers(), list = names(who);
+  const state = cur ? (cur.muffled ? 'Muffled' : cur.aside ? 'Talking to you' : 'Talking out loud') : pend ? 'Drawing breath' : N.muffle > 0 ? 'Muffled' : 'Quiet';
+  const cause = cur || pend ? (cur && cur.aside ? 'nobody else can hear this' : `because ${(cur || pend).cause}`) : N.muffle > 0 ? 'the idol is over his mouth' : 'until she does something';
+  const hot = (loud || pend || said) && who.length > 0;
+  const earsText = who.length ? `${list} ${loud ? 'can' : 'would'} hear` : 'no guard would hear';
+  const key = [state, cause, earsText, hot].join('|');
+  if (key !== hudKey) { hudKey = key;   // the DOM only changes when what it says changes
+    $('state').textContent = state; $('state').style.color = loud ? 'var(--parchment)' : pend ? 'var(--gilt)' : cur ? 'var(--hush)' : 'var(--parchment-dim)';
+    $('cause').textContent = cause;
+    $('ears').innerHTML = (who.length ? earSvg('#ff8a6a') : earSvg('#6b6358')) + `<span>${earsText}</span>`; $('ears').classList.toggle('hot', who.length > 0);
+  }
+  $('breathBar').firstElementChild.style.width = pend && pend.breath ? (100 * (1 - pend.left / pend.breath)) + '%' : '0%';
+  if (!cur && !pend) { const p = $('sub').firstElementChild; if (N.cur && over(N.cur.node)) p.style.opacity = 0; }
+  // his ring before he speaks, cut by walls exactly as his voice will be: while he draws breath, and whenever she stands
+  // at something he would talk about. Red if a guard is inside it.
+  const showPrev = (!!pend && !pend.aside) || said;
+  preview.visible = showPrev;
+  if (showPrev) { setRing(preview.geometry, voiceShape(G.P, reach()), 1); preview.position.set(G.P.x, .035, G.P.z);
+    const pu = preview.material.uniforms; pu.color.value.setHex(who.length ? HOT_COL : SAFE_COL); pu.alpha.value = pend ? .7 + .3 * Math.sin(G.time * 10) : .6; pu.spin.value = G.time * .25; }
+  for (const s of SIGHTS) { const on = sightOn(s) && G.started && !G.over; s.ring.visible = on;
+    if (on) { const u = s.ring.material.uniforms; u.alpha.value = .5 + .2 * Math.sin(G.time * 2.4); u.spin.value = G.time * .06; } }
+  // the arc behind the guard whose pocket is next, while she is near him
+  const pst = STEPS[stage()], pg = pst.pocket && guard(pst.pocket), near = pg && !pg.picked && dist(pg, G.P) < 6 && !G.over;
+  backArc.material.opacity = near ? (pg.state === 'patrol' ? .22 + .12 * Math.sin(G.time * 5) : .07) : 0;
+  if (near) { backArc.position.set(pg.x, .03, pg.z); backArc.rotation.y = -(pg.face + Math.PI); }
+  const pe = $('prompt');
+  pe.hidden = !it;
+  reachGlow.material.opacity = it && it.at ? .55 + .25 * Math.sin(G.time * 6) : 0;
+  if (it && it.at) { reachGlow.position.set(it.at.x, .03, it.at.z); reachGlow.material.color.setHex(it.kind === 'dull' ? 0xb7a98c : 0xe6c25a); }
+  if (it) { const [k, t, n0] = it.text, note = n0 || (said ? (who.length ? `${list} would hear him, and come to look` : 'No guard would hear him') : '');
+    $('pkey').textContent = k; $('pkey').hidden = !k; if ($('promptText').textContent !== t) $('promptText').textContent = t;
+    $('promptNote').textContent = note; $('promptNote').hidden = !note; $('promptNote').className = said && !n0 ? (who.length ? 'hot' : 'safe') : '';
+    $('hold').firstElementChild.style.width = G.hold ? (100 * G.hold.t / G.hold.need) + '%' : '0%'; $('hold').hidden = !it.need; }
+  // marks over the guards
+  const w = VIEW.w, h = VIEW.h, v = TAGV, ears = new Set(loud || pend || said ? who : []);
+  for (const g of G.guards) {
+    const hh = g.mesh.cardH * .95; v.set(g.x, hh * Math.cos(ELEV) + .1, g.z - hh * Math.sin(ELEV)).project(camera);
+    const sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h, on = v.z < 1 && sx > -50 && sx < w + 50 && sy > -50 && sy < h + 50 && !(sx < BOXR.r && sy < BOXR.b);
+    const mark = g.sleeping ? 'z' : g.state === 'chase' ? '!' : g.state === 'investigate' || g.state === 'search' || g.state === 'pat' || g.sus > .15 ? '?' : '';
+    const tk = [on, mark, ears.has(g)].join();
+    if (tk !== g.tagKey) { g.tagKey = tk;   // rebuilt only when it changes
+      g.tag.innerHTML = !on ? '' : (mark ? `<span class="m">${MARKS[mark]}</span>` : '') +
+        (ears.has(g) ? EAR_SVG : ''); }
+    g.tag.style.left = sx + 'px'; g.tag.style.top = sy + 'px';
+    if (g.bubble) { if (G.time > g.bubble.until) { g.bubble.el.remove(); g.bubble = null; }
+      else { g.bubble.sx = clamp(sx, 130, w - 130); g.bubble.sy = sy - 40; g.bubble.on = on; } }
+  }
+  objMarker(w, h);
+  const bubs = G.guards.filter(g => g.bubble && g.bubble.on).map(g => g.bubble).sort((a, b) => b.sy - a.sy);
+  for (let i = 0; i < bubs.length; i++) { const b = bubs[i];
+    for (let j = 0; j < i; j++) { const o = bubs[j]; if (Math.abs(o.sx - b.sx) < 230 && b.sy > o.sy - (o.el.offsetHeight + 14)) b.sy = o.sy - (o.el.offsetHeight + 14); }
+    b.el.style.left = b.sx + 'px'; b.el.style.top = Math.max(b.el.offsetHeight + 8, b.sy) + 'px'; }
+  for (const g of G.guards) if (g.bubble) g.bubble.el.style.display = g.bubble.on ? '' : 'none';
+}
+const cap = s => s[0].toUpperCase() + s.slice(1);
+function objMarker(w, h) {
+  const t = STEPS[stage()].mark(), el = $('objMark'), v = TAGV, hide = G.over || G.intro;
+  el.hidden = hide; if (hide) return;
+  v.set(t.x, t.y * Math.cos(ELEV), t.z - t.y * Math.sin(ELEV)).project(camera);
+  let sx = (v.x + 1) / 2 * w, sy = (1 - v.y) / 2 * h; const m = 46, inside = v.z < 1 && sx > m && sx < w - m && sy > 120 && sy < h - 90;
+  const key = t.icon + t.label + inside;
+  if (el.dataset.k !== key) { el.dataset.k = key; el.innerHTML = (inside ? OBJ_ICONS[t.icon] : OBJ_ICONS.arrow) + `<span>${t.label}</span>`; el.classList.toggle('edge', !inside); }
+  if (!inside) { const cx = w / 2, cy = h / 2, a = Math.atan2(sy - cy, sx - cx); sx = clamp(sx, m, w - m); sy = clamp(sy, 130, h - 90); el.firstElementChild.style.transform = `rotate(${a}rad)`; }
+  else el.firstElementChild.style.transform = '';
+  el.style.left = sx + 'px'; el.style.top = sy + 'px';
+}
+const VIEW = { w: 1, h: 1 }, TAGV = new THREE.Vector3(), BOXR = { r: 0, b: 0 };   // tags never draw over Percival's plate
+
+// ---------------------------------------------------------------- the start screen: a quiet heist, nothing more
+const mc = $('mouseC').getContext('2d'), gc = $('guardC').getContext('2d'); mc.imageSmoothingEnabled = gc.imageSmoothingEnabled = false;
+let stageT = 0;
+function stageTick(dt) {
+  stageT += dt;
+  const el = $('stage'), sw = el.clientWidth, S = sheetFor('mouse'), Gs = sheetFor('gord');
+  const span = sw + 200, x = (stageT * 30 + sw * .3) % span - 120, gx = sw * .64, lit = Math.abs(x + S.fw - gx) < 80, sneakA = S.anims['sk-sneak'] ? 'sk-sneak' : 'crouched-walking';
+  // draws a frame and says how big to show it (px per texel) and where its feet are, so both stand on the gilt line
+  const blit = (ctx, Sh, anim, faceA, t, px) => { const { col, row, flip } = frameOf(Sh, anim, faceA, t), img = IMG.get(Sh.src), A = Sh.anims[anim] || Sh.anims[Object.keys(Sh.anims)[0]];
+    if (ctx.canvas.width !== Sh.fw) { ctx.canvas.width = Sh.fw; ctx.canvas.height = Sh.fh; ctx.imageSmoothingEnabled = false; }
+    ctx.clearRect(0, 0, Sh.fw, Sh.fh); ctx.save(); if (flip) { ctx.translate(Sh.fw, 0); ctx.scale(-1, 1); } ctx.drawImage(img, col * Sh.fw, row * Sh.fh, Sh.fw, Sh.fh, 0, 0, Sh.fw, Sh.fh); ctx.restore();
+    const k = px * (Sh.scale && Sh.scale[anim] || 1); return { size: k * Sh.fw, bottom: 20 - k * (Sh.feet && Sh.feet[anim] ? Sh.feet[anim][row - A.row] : Sh.foot) }; };
+  // she freezes in his lantern light, and creeps on while he looks the other way
+  const looking = Math.sin(stageT * .45) > 0;
+  const mf = blit(mc, S, lit && looking ? 'breathing-idle' : sneakA, 0, stageT * 8, S.fw > 64 ? 2 : 3);   // her larger canvas at 2x keeps her texels the size they are in play
+  const m = $('mouseC'); m.style.width = m.style.height = mf.size + 'px'; m.style.left = x + 'px'; m.style.bottom = mf.bottom + 'px';
+  const gf = blit(gc, Gs, 'breathing-idle', looking ? Math.PI : Math.PI / 2, stageT * 5, 3);
+  const g = $('guardC'); g.style.width = g.style.height = gf.size + 'px'; g.style.left = (gx + 30) + 'px'; g.style.bottom = gf.bottom + 'px';
+  $('lantern').style.left = (gx + 60) + 'px';
+}
+
+// ---------------------------------------------------------------- loop
+let last = performance.now(), camAngle = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!$('start').hidden) stageTick(dt);
+  if (G.started && !G.paused) {
+    G.time += dt; G.totalTime = (G.totalTime || 0) + (G.over ? 0 : dt);
+    mouseTick(dt); holdTick(dt);
+    for (const g of G.guards) guardTick(g, dt);
+    narratorTick(dt);
+  }
+  doorPivot.rotation.y += ((G.door ? 1.6 : 0) - doorPivot.rotation.y) * Math.min(1, dt * 3);   // the door swings in, the gate rises
+  gate.position.y += ((G.gate ? 1.65 : 0) - gate.position.y) * Math.min(1, dt * 1.5);
+  grate.position.y += ((G.gate ? 1.3 : 0) - grate.position.y) * Math.min(1, dt * 1.5);
+  for (const t of TGATES) t.mesh.position.y += ((G.open[t.id] ? 1.65 : 0) - t.mesh.position.y) * Math.min(1, dt * 2.5);
+  for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt / .9; const k = Math.max(.02, 1 - Math.pow(1 - Math.min(1, r.t), 2));
+    setRing(r.m.geometry, r.radii, k); r.m.material.uniforms.alpha.value = .75 * (1 - r.t);
+    if (r.t >= 1) { scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); } }
+  let tx, tz;
+  if (G.started) { tx = clamp(G.P.x, 7.5, 26.5); tz = clamp(G.P.z - 1.4, 6, 46.5);   // looking a little ahead: the way runs north
+    const ws = 2 * CAMD * Math.tan(camera.fov * Math.PI / 360) / POST.rtH; tx = Math.round(tx / ws) * ws; tz = Math.round(tz / (ws / Math.sin(ELEV))) * (ws / Math.sin(ELEV));
+    camera.position.set(tx, Math.sin(ELEV) * CAMD, tz + Math.cos(ELEV) * CAMD); }
+  else { camAngle += dt * .05; tx = 16.5 + Math.sin(camAngle) * 3; tz = 17; camera.position.set(tx, 9.5, tz + 9 + Math.cos(camAngle) * 2); }
+  camera.lookAt(tx, .4, tz);
+  const order = TORCHES.map(t => ({ t, d: Math.hypot(t.x - tx, t.z - tz) })).sort((a, b) => a.d - b.d);
+  const flick = i => (.9 + .1 * Math.sin(now / 90 + i * 2.1) + .05 * Math.sin(now / 37 + i));
+  SPOTS.forEach((s, i) => { const o = order[i]; if (!o) { s.intensity = 0; return; }
+    s.position.set(o.t.x, o.t.y + .05, o.t.z); s.target.position.set(o.t.x, 0, o.t.z + .02); s.intensity = 9 * flick(i) * clamp(1.6 - o.d / 14, 0, 1); });
+  LIGHTS.forEach((l, i) => { const o = order[i < 3 ? i : i]; if (!o) { l.intensity = 0; return; }
+    l.position.set(o.t.x, o.t.y, o.t.z); l.intensity = (i < 3 ? 1.6 : 3.6) * flick(i) * clamp(1.6 - o.d / 14, 0, 1); });
+  atmosphere(dt, now, order.slice(0, 4).map(o => o.t));
+  POST.fin.uniforms.uAlarm.value += ((G.started && G.guards.some(g => g.state === 'chase') ? .85 : 0) - POST.fin.uniforms.uAlarm.value) * Math.min(1, dt * 4);
+  if (G.started) hud(dt);
+  if (!G.started && (frameN++ & 1)) return;   // behind the start screen, half the frames are plenty
+  POST.render(now / 1000);
+}
+let frameN = 0;
+function resize() { const w = innerWidth, h = innerHeight; VIEW.w = w; VIEW.h = h; const br = $('box').getBoundingClientRect(); BOXR.r = br.right + 10; BOXR.b = br.bottom + 30; renderer.setSize(w, h, false); POST.setSize(w, h); camera.aspect = w / h; camera.fov = w < h ? 58 : 40; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+G.P = { x: 16.5, z: 20, face: 0 }; G.guards = []; G.items = {};
+requestAnimationFrame(frame);
+
+// load the props and the voice, then the vaults are ready
+const NAMES = [...new Set([...PROPS.map(p => p.m), 'lever-down'])];
+let loaded = 0;
+const total = NAMES.length + 1;
+const tick = () => { loaded++; $('go').textContent = loaded < total ? `Loading ${Math.round(100 * loaded / total)}%` : 'Begin'; if (loaded >= total) { $('go').disabled = false; $('go').focus(); } };
+const need = r => { if (!r.ok) throw new Error(r.url.split('/').pop() + ' ' + r.status); return r; };
+try {
+  const voice = fetch('voice.mp3').then(need).then(r => r.arrayBuffer()).then(b => { BIN = b; tick(); });
+  PACK = await fetch('props3d.json').then(need).then(r => r.json());
+  await Promise.all([...NAMES.map(n => loadGLB(n).then(tick)), voice]);
+  PACK = null;
+} catch (e) { $('go').textContent = 'The vaults would not load. Reload the page to try again.'; throw e; }
+for (const p of PROPS) place(p);
+reset();
+
+// ---------------------------------------------------------------- input
+addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (keys.has(e.code)) return; keys.add(e.code);
+  if (e.code === 'KeyE') pressUse();
+  if (e.code === 'KeyQ') pressShh();
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') touch.sneak = !touch.sneak;
+  if (e.code === 'Enter' && !$('start').hidden && !$('go').disabled) $('go').click();
+  if (e.code === 'KeyR' && G.over && !$('end').hidden && !$('again').hidden) begin(G.save);
+  if (e.code === 'Escape' || e.code === 'KeyP') pause(!G.paused);
+});
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyE') releaseUse(); });
+addEventListener('blur', () => { keys.clear(); releaseUse(); });
+function pause(on) {
+  if (!G.started || G.over) return;
+  G.paused = on; $('pause').hidden = !on; $('app').classList.toggle('carded', on); keys.clear(); releaseUse();
+  $('retry').hidden = G.guards.some(g => g.state === 'chase');
+  if (AC) on ? AC.suspend() : AC.resume(); if (on) setTimeout(() => $('resume').focus(), 30);
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
+$('resume').onclick = () => pause(false);
+$('retry').onclick = () => { pause(false); begin(G.save); };
+$('go').onclick = () => { $('start').hidden = true; if (!AC) startAudio(); AC.resume(); begin(); };
+// a suspended audio clock (a phone call, the app switcher) wakes at the next touch or key
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { if (AC && AC.state !== 'running' && !G.paused) AC.resume(); });
+$('again').onclick = () => begin(G.save);
+$('over').onclick = () => { G.runs = 1; begin(); };
+let COARSE = matchMedia('(any-pointer: coarse)').matches;
+addEventListener('touchstart', () => { if (!COARSE) { COARSE = true; if (G.started) $('touch').hidden = false; } }, { once: true, passive: true });
+{
+  const st = $('stick'), kn = $('knob'); let id = null, cx = 0, cy = 0;
+  const mv = e => { if (e.pointerId !== id) return; let dx = (e.clientX - cx) / 56, dy = (e.clientY - cy) / 56; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    touch.x = dx; touch.z = dy; kn.style.transform = `translate(${dx * 42}px, ${dy * 42}px)`; };
+  st.addEventListener('pointerdown', e => { id = e.pointerId; st.setPointerCapture(id); const r = st.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; touch.on = true; mv(e); });
+  st.addEventListener('pointermove', mv);
+  const up = e => { if (e.pointerId !== id) return; id = null; touch.on = false; touch.x = touch.z = 0; kn.style.transform = ''; };
+  st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+  const hold = (b, on, off) => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('on'); on(); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { b.classList.remove('on'); off(); }); };
+  hold($('bUse'), pressUse, releaseUse);
+  $('bPause').addEventListener('click', () => pause(true));
+  $('bShh').addEventListener('pointerdown', e => { e.preventDefault(); pressShh(); });
+  hold($('bRun'), () => touch.run = true, () => touch.run = false);
+  $('bSneak').addEventListener('pointerdown', e => { e.preventDefault(); touch.sneak = !touch.sneak; });
+}
+window.__ln = { G, N, SIGHTS, STEPS, LEVERS, TGATES, VOICE_R, guard, keys, touch, pressUse, releaseUse, pressShh, interactable, begin, trigger, drama, hearers, effDist, findPath, findPathMouse: (a, b) => findPath(a, b, walkable), sightLine, lightAt, PROPS, LEVER, PEDESTAL, DOOR, GATE, GRATE, ROPE, CLIPS, GROUPS, RANGE, HALF, stage, speaking };
+</script>

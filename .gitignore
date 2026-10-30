@@ -1,0 +1,6 @@
+.secrets/
+art/raw/
+art/audio/cache/
+__pycache__/
+out/
+art/audio/
